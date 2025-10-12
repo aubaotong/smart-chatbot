@@ -1,1 +1,3 @@
 # smart-chatbot
+streamlit
+requests
