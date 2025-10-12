@@ -5,13 +5,13 @@ import csv
 from io import StringIO
 
 # Config (API key sẽ lấy từ secrets trên Streamlit Cloud)
-GROK_API_KEY = st.secrets.get("GROK_API_KEY", "your_key_here")  # Thay tạm nếu test local
+GROK_API_KEY = st.secrets.get("GROK_API_KEY", "xai-PuN3EjJ0XH6W4J2v0mljxvAd4KeAq4bmkjdLjVOGKfIcQljADjMoOMPiOfgxXzHeJ0hJsNtrr4a1fwDg")  # Thay tạm nếu test local
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 
 # Hàm tải dữ liệu Sheets (chạy một lần khi app load)
 @st.cache_data(ttl=300)  # Cache 5 phút, tự cập nhật
 def load_advice_from_sheets(sheet_key):
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_key}/export?format=csv&gid=0"
+    url = f"https://docs.google.com/spreadsheets/d/{1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60}/export?format=csv&gid=0"
     try:
         with urllib.request.urlopen(url) as response:
             csv_data = response.read().decode('utf-8')
@@ -100,4 +100,5 @@ if prompt := st.chat_input("Nhập câu hỏi của bạn..."):
 # Nút clear chat
 if st.button("Xóa lịch sử chat"):
     st.session_state.messages = []
+
     st.rerun()
