@@ -28,7 +28,7 @@ def load_advice_from_sheets(sheet_key):
 
 # Hàm gọi Grok API
 def call_grok_api(prompt, history=""):
-    if GROK_API_KEY == "your_key_here":
+    if GROK_API_KEY == "xai-PuN3EjJ0XH6W4J2v0mljxvAd4KeAq4bmkjdLjVOGKfIcQljADjMoOMPiOfgxXzHeJ0hJsNtrr4a1fwDg":
         return "Vui lòng cấu hình API key trong Streamlit Secrets."
     headers = {
         "Authorization": f"Bearer {GROK_API_KEY}",
@@ -101,5 +101,6 @@ if prompt := st.chat_input("Nhập câu hỏi của bạn..."):
 if st.button("Xóa lịch sử chat"):
     st.session_state.messages = []
     st.rerun()
+
 
 
