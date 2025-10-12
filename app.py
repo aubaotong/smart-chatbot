@@ -5,7 +5,7 @@ import csv
 from io import StringIO
 
 # Config (API key sẽ lấy từ secrets trên Streamlit Cloud)
-GROK_API_KEY = st.secrets.get("GROK_API_KEY", "your_key_here")  # Thay tạm nếu test local
+GROK_API_KEY = st.secrets.get("GROK_API_KEY", "xai-PuN3EjJ0XH6W4J2v0mljxvAd4KeAq4bmkjdLjVOGKfIcQljADjMoOMPiOfgxXzHeJ0hJsNtrr4a1fwDg")  # Thay tạm nếu test local
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 
 # Hàm tải dữ liệu Sheets (chạy một lần khi app load)
@@ -101,3 +101,4 @@ if prompt := st.chat_input("Nhập câu hỏi của bạn..."):
 if st.button("Xóa lịch sử chat"):
     st.session_state.messages = []
     st.rerun()
+
