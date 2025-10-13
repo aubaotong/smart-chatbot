@@ -5,7 +5,7 @@ import csv
 from io import StringIO
 
 # Config (API key sẽ lấy từ secrets trên Streamlit Cloud)
-GROK_API_KEY = st.secrets.get("GROK_API_KEY", "your_key_here")  # Thay tạm nếu test local
+GROK_API_KEY = st.secrets.get("GROK_API_KEY", "xai-r4VDlb4Cj21mkjI99TFqoQPZWAx0lclmtIonR9x23ycQjTCx8evMsHm9LDb2kPL0AkM7gNqrHI1NH8LF")  # Thay tạm nếu test local
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 
 # Hàm tải dữ liệu Sheets (chạy một lần khi app load)
@@ -28,7 +28,7 @@ def load_advice_from_sheets(sheet_key):
 
 # Hàm gọi Grok API
 def call_grok_api(prompt, history=""):
-    if GROK_API_KEY == "your_key_here":
+    if GROK_API_KEY == "xai-r4VDlb4Cj21mkjI99TFqoQPZWAx0lclmtIonR9x23ycQjTCx8evMsHm9LDb2kPL0AkM7gNqrHI1NH8LF":
         return "Vui lòng cấu hình API key trong Streamlit Secrets."
     headers = {
         "Authorization": f"Bearer {GROK_API_KEY}",
