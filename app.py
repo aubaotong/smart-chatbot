@@ -5,7 +5,7 @@ from io import StringIO
 import json
 
 # Thay bằng API key của bạn từ https://x.ai/api
-GROK_API_KEY = "yxai-r4VDlb4Cj21mkjI99TFqoQPZWAx0lclmtIonR9x23ycQjTCx8evMsHm9LDb2kPL0AkM7gNqrHI1NH8LF"  # Ví dụ: "gsk_abc123..."
+GROK_API_KEY = "your_grok_api_key_here"  # Ví dụ: "gsk_abc123..."
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"  # Endpoint Grok API (tương tự OpenAI format)
 
 # Hàm tải dữ liệu từ Google Sheets (như trước)
@@ -58,7 +58,7 @@ def run_smart_chatbot():
     print("=== SMART CHATBOT AI (Grok-powered) ===")
     sheet_key = input("Nhập key Google Sheets (Enter cho demo): ").strip()
     if not sheet_key:
-        sheet_key = "1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60"
+        sheet_key = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
     
     # Tải dữ liệu Sheets và nhúng vào prompt system
     sheets_data = load_advice_from_sheets(sheet_key)
