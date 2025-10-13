@@ -1,15 +1,14 @@
-import streamlit as st
 import requests
 import urllib.request
 import csv
 from io import StringIO
+import json
 
-# Config (API key sẽ lấy từ secrets trên Streamlit Cloud)
-GROK_API_KEY = st.secrets.get("xai-PuN3EjJ0XH6W4J2v0mljxvAd4KeAq4bmkjdLjVOGKfIcQljADjMoOMPiOfgxXzHeJ0hJsNtrr4a1fwDg", "xai-PuN3EjJ0XH6W4J2v0mljxvAd4KeAq4bmkjdLjVOGKfIcQljADjMoOMPiOfgxXzHeJ0hJsNtrr4a1fwDg")  # Thay tạm nếu test local
-GROK_API_URL = "https://api.x.ai/v1/chat/completions"
+# Thay bằng API key của bạn từ https://x.ai/api
+GROK_API_KEY = "yxai-r4VDlb4Cj21mkjI99TFqoQPZWAx0lclmtIonR9x23ycQjTCx8evMsHm9LDb2kPL0AkM7gNqrHI1NH8LF"  # Ví dụ: "gsk_abc123..."
+GROK_API_URL = "https://api.x.ai/v1/chat/completions"  # Endpoint Grok API (tương tự OpenAI format)
 
-# Hàm tải dữ liệu Sheets (chạy một lần khi app load)
-@st.cache_data(ttl=300)  # Cache 5 phút, tự cập nhật
+# Hàm tải dữ liệu từ Google Sheets (như trước)
 def load_advice_from_sheets(sheet_key):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_key}/export?format=csv&gid=0"
     try:
@@ -20,33 +19,31 @@ def load_advice_from_sheets(sheet_key):
         for row in reader:
             if 'Câu hỏi' in row and 'Lời khuyên' in row:
                 advice_list.append(f"Câu hỏi: {row['Câu hỏi']} | Lời khuyên: {row['Lời khuyên']}")
-        st.success(f"Đã tải {len(advice_list)} lời khuyên từ Sheets.")
+        print(f"Đã tải {len(advice_list)} lời khuyên từ Sheets.")
         return "\n".join(advice_list)
     except Exception as e:
-        st.error(f"Lỗi tải Sheets: {e}")
+        print(f"Lỗi tải Sheets: {e}")
         return "Không có dữ liệu Sheets."
 
 # Hàm gọi Grok API
 def call_grok_api(prompt, history=""):
-    if GROK_API_KEY == "xai-PuN3EjJ0XH6W4J2v0mljxvAd4KeAq4bmkjdLjVOGKfIcQljADjMoOMPiOfgxXzHeJ0hJsNtrr4a1fwDg":
-        return "Vui lòng cấu hình API key trong Streamlit Secrets."
     headers = {
         "Authorization": f"Bearer {GROK_API_KEY}",
         "Content-Type": "application/json"
     }
     data = {
-        "model": "grok-beta",
+        "model": "grok-beta",  # Hoặc model mới nhất từ docs
         "messages": [
             {"role": "system", "content": f"""
-            Bạn là chatbot AI thông minh, chuyên lời khuyên. 
-            Dữ liệu từ Sheets: {prompt}
-            Trả lời tự nhiên, thân thiện bằng tiếng Việt. Nếu không khớp, đưa lời khuyên chung.
-            Giữ ngắn gọn. Hỗ trợ 'hướng dẫn' để giải thích.
+            Bạn là một chatbot AI thông minh, chuyên đưa lời khuyên hữu ích. 
+            Dữ liệu kiến thức từ Sheets (cập nhật liên tục): {prompt}
+            Hãy trả lời tự nhiên, thân thiện bằng tiếng Việt. Nếu không khớp dữ liệu, đưa lời khuyên chung thông minh.
+            Giữ câu trả lời ngắn gọn, hữu ích. Hỗ trợ lệnh đặc biệt: 'hướng dẫn' để giải thích cách dùng.
             """},
             {"role": "user", "content": f"{history}\nNgười dùng: {prompt}"}
         ],
-        "max_tokens": 300,
-        "temperature": 0.7
+        "max_tokens": 300,  # Giới hạn độ dài response
+        "temperature": 0.7  # Độ sáng tạo (0.0-1.0)
     }
     try:
         response = requests.post(GROK_API_URL, headers=headers, json=data)
@@ -54,53 +51,39 @@ def call_grok_api(prompt, history=""):
         result = response.json()
         return result['choices'][0]['message']['content'].strip()
     except Exception as e:
-        return f"Lỗi API: {e}. Kiểm tra key tại https://x.ai/api."
+        return f"Lỗi API: {e}. Kiểm tra key và quota tại https://x.ai/api."
 
-# Streamlit App chính
-st.title("🤖 Smart Chatbot AI (Grok-powered)")
-
-# Sidebar cho config
-with st.sidebar:
-    st.header("Cấu hình")
-    sheet_key = st.text_input("Google Sheets Key (Enter cho demo)", 
-                              value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
-    if st.button("Tải lại dữ liệu Sheets"):
-        st.cache_data.clear()
-        st.rerun()
-
-# Tải dữ liệu
-sheets_data = load_advice_from_sheets(sheet_key)
-
-# Khởi tạo session state cho lịch sử chat
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Hiển thị lịch sử chat
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Input chat
-if prompt := st.chat_input("Nhập câu hỏi của bạn..."):
-    # Thêm user message
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+# Chatbot chính
+def run_smart_chatbot():
+    print("=== SMART CHATBOT AI (Grok-powered) ===")
+    sheet_key = input("Nhập key Google Sheets (Enter cho demo): ").strip()
+    if not sheet_key:
+        sheet_key = "1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60"
     
-    # Tạo response
-    with st.chat_message("assistant"):
-        history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])  # Giới hạn lịch sử
-        with st.spinner("Đang suy nghĩ..."):
-            response = call_grok_api(sheets_data, history)
-        st.markdown(response)
+    # Tải dữ liệu Sheets và nhúng vào prompt system
+    sheets_data = load_advice_from_sheets(sheet_key)
     
-    # Lưu response
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    print("\nChat bắt đầu! Type 'quit' để thoát. Tôi sẽ nhớ ngữ cảnh chat.\n")
+    print("--- Khung Chat ---")
+    
+    history = ""  # Lưu lịch sử để AI nhớ (có thể mở rộng)
+    
+    while True:
+        user_input = input("\nBạn: ").strip()
+        if user_input.lower() == 'quit':
+            print("Bot: Tạm biệt! Hẹn gặp lại.")
+            break
+        
+        # Xây dựng prompt với lịch sử
+        full_prompt = f"{history}\n{user_input}"
+        response = call_grok_api(sheets_data, full_prompt)  # Nhúng Sheets vào system prompt
+        
+        print(f"Bot: {response}")
+        
+        # Cập nhật lịch sử (giới hạn để tránh token dài)
+        history += f"\nBạn: {user_input}\nBot: {response}\n"
+        if len(history) > 1000:  # Cắt ngắn nếu quá dài
+            history = history[-1000:]
 
-# Nút clear chat
-if st.button("Xóa lịch sử chat"):
-    st.session_state.messages = []
-    st.rerun()
-
-
-
+if __name__ == "__main__":
+    run_smart_chatbot()
