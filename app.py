@@ -5,8 +5,8 @@ import csv
 from io import StringIO
 
 # Config (API key sẽ lấy từ secrets trên Streamlit Cloud)
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your_key_here")  # Thay tạm nếu test local
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyD1wqjr50LeXxCgpmnoLqKzrMQbHBVSewo")  # Thay tạm nếu test local
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
 
 # Hàm tải dữ liệu Sheets (chạy một lần khi app load)
 @st.cache_data(ttl=300)  # Cache 5 phút, tự cập nhật
@@ -108,3 +108,4 @@ if prompt := st.chat_input("Nhập câu hỏi của bạn..."):
 if st.button("Xóa lịch sử chat"):
     st.session_state.messages = []
     st.rerun()
+
