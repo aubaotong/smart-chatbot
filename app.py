@@ -4,12 +4,12 @@ import requests
 # --- Cấu hình ---
 # Lấy API key từ Streamlit Secrets một cách an toàn
 try:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+    GEMINI_API_KEY = st.secrets['GEMINI_API_KEY']
 except (FileNotFoundError, KeyError):
     st.error("Lỗi: Không tìm thấy GEMINI_API_KEY. Vui lòng thêm vào mục Secrets trong Settings.")
     st.stop() # Dừng ứng dụng nếu không có key
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro"
 
 # --- Hàm gọi Gemini API (ĐÃ ĐƠN GIẢN HÓA) ---
 def call_gemini_api(user_prompt, history):
@@ -81,6 +81,7 @@ if user_input := st.chat_input("Nhập câu hỏi của bạn..."):
             response = call_gemini_api(user_input, history)
             st.markdown(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
+
 
 
 
