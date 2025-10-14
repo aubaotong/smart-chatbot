@@ -4,9 +4,9 @@ import urllib.request
 import csv
 from io import StringIO
 
-# Config (API key sẽ lấy từ input hoặc secrets)
-GROK_API_KEY = st.secrets.get("GROK_API_KEY")  # Lấy từ Secrets nếu có
-GROK_API_URL = "https://api.x.ai/v1/chat/completions"
+# Config (API key sẽ lấy từ secrets trên Streamlit Cloud)
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your_key_here")  # Thay tạm nếu test local
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
 
 # Hàm tải dữ liệu Sheets (chạy một lần khi app load)
 @st.cache_data(ttl=300)  # Cache 5 phút, tự cập nhật
@@ -26,51 +26,51 @@ def load_advice_from_sheets(sheet_key):
         st.error(f"Lỗi tải Sheets: {e}")
         return "Không có dữ liệu Sheets."
 
-# Hàm gọi Grok API
-def call_grok_api(prompt, history=""):
-    if not GROK_API_KEY:
-        return "Vui lòng nhập API key trong phần Cấu hình hoặc thêm vào Streamlit Secrets."
+# Hàm gọi Gemini API
+def call_gemini_api(prompt, history=""):
+    if GEMINI_API_KEY == "your_key_here":
+        return "Vui lòng cấu hình API key trong Streamlit Secrets."
     headers = {
-        "Authorization": f"Bearer {GROK_API_KEY}",
         "Content-Type": "application/json"
     }
     data = {
-        "model": "grok-beta",
-        "messages": [
-            {"role": "system", "content": f"""
-            Bạn là chatbot AI thông minh, chuyên lời khuyên. 
-            Dữ liệu từ Sheets: {prompt}
-            Trả lời tự nhiên, thân thiện bằng tiếng Việt. Nếu không khớp, đưa lời khuyên chung.
-            Giữ ngắn gọn. Hỗ trợ 'hướng dẫn' để giải thích.
-            """},
-            {"role": "user", "content": f"{history}\nNgười dùng: {prompt}"}
-        ],
-        "max_tokens": 300,
-        "temperature": 0.7
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": f"""
+Bạn là chatbot AI thông minh, chuyên lời khuyên. 
+Dữ liệu từ Sheets: {prompt}
+Trả lời tự nhiên, thân thiện bằng tiếng Việt. Nếu không khớp, đưa lời khuyên chung.
+Giữ ngắn gọn. Hỗ trợ 'hướng dẫn' để giải thích.
+Lịch sử hội thoại: {history}
+Người dùng: {prompt}
+"""
+                    }
+                ]
+            }
+        ]
     }
     try:
-        response = requests.post(GROK_API_URL, headers=headers, json=data)
+        response = requests.post(
+            f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
+            headers=headers,
+            json=data
+        )
         response.raise_for_status()
         result = response.json()
-        return result['choices'][0]['message']['content'].strip()
+        return result['candidates'][0]['content']['parts'][0]['text'].strip()
     except Exception as e:
-        return f"Lỗi API: {e}. Kiểm tra key tại https://x.ai/api."
+        return f"Lỗi API: {e}. Kiểm tra key tại https://cloud.google.com/generative-ai."
 
 # Streamlit App chính
-st.title("🤖 Smart Chatbot AI (Grok-powered)")
+st.title("🤖 Smart Chatbot AI (Gemini-powered)")
 
 # Sidebar cho config
 with st.sidebar:
     st.header("Cấu hình")
-    # Ô nhập Google Sheets Key
     sheet_key = st.text_input("Google Sheets Key (Enter cho demo)", 
                               value="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms")
-    # Ô nhập Grok API Key
-    api_key = st.text_input("Grok API Key (Enter để bỏ qua)", 
-                            value="", 
-                            type="password")  # Ẩn key khi nhập
-    if api_key:
-        GROK_API_KEY = api_key  # Gán key từ input nếu có
     if st.button("Tải lại dữ liệu Sheets"):
         st.cache_data.clear()
         st.rerun()
@@ -98,7 +98,7 @@ if prompt := st.chat_input("Nhập câu hỏi của bạn..."):
     with st.chat_message("assistant"):
         history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])  # Giới hạn lịch sử
         with st.spinner("Đang suy nghĩ..."):
-            response = call_grok_api(sheets_data, history)
+            response = call_gemini_api(sheets_data, history)
         st.markdown(response)
     
     # Lưu response
