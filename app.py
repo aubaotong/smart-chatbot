@@ -28,7 +28,7 @@ def load_advice_from_sheets(sheet_key):
 
 # Hàm gọi Gemini API
 def call_gemini_api(prompt, history=""):
-    if GEMINI_API_KEY == "your_key_here":
+    if GEMINI_API_KEY == "AIzaSyAiRgyISAwWihXhLVuCVbZnOm9RzXKO6J4":
         return "Vui lòng cấu hình API key trong Streamlit Secrets."
     headers = {
         "Content-Type": "application/json"
@@ -110,6 +110,7 @@ if st.button("Xóa lịch sử chat"):
     st.rerun()
 
 # (Giữ nguyên các hàm load_advice_from_sheets, call_gemini_api, và giao diện Streamlit như trước)
+
 
 
 
