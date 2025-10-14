@@ -5,7 +5,7 @@ import csv
 from io import StringIO
 
 # Config (dùng key trực tiếp để test local)
-GEMINI_API_KEY = "AIzaSyC1yq6tGrVPOiIXxluD5ClTcgHEGUix0RA"  # Thay bằng key mới nếu cần
+GEMINI_API_KEY = "AIzaSyAiRgyISAwWihXhLVuCVbZnOm9RzXKO6J4"  # Thay bằng key mới nếu cần
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
 
 # Hàm tải dữ liệu Sheets (chạy một lần khi app load)
@@ -110,4 +110,5 @@ if st.button("Xóa lịch sử chat"):
     st.rerun()
 
 # (Giữ nguyên các hàm load_advice_from_sheets, call_gemini_api, và giao diện Streamlit như trước)
+
 
