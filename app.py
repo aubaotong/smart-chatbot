@@ -10,87 +10,106 @@ except (FileNotFoundError, KeyError):
     st.stop() # Dừng ứng dụng nếu không có key
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
+# Hàm tải dữ liệu Sheets (chạy một lần khi app load)
+@st.cache_data(ttl=300)  # Cache 5 phút, tự cập nhật
+def load_advice_from_sheets(sheet_key):
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_key}/export?format=csv&gid=0"
+    try:
+        with urllib.request.urlopen(url) as response:
+            csv_data = response.read().decode('utf-8')
+        reader = csv.DictReader(StringIO(csv_data))
+        advice_list = []
+        for row in reader:
+            if 'Câu hỏi' in row and 'Lời khuyên' in row:
+                advice_list.append(f"Câu hỏi: {row['Câu hỏi']} | Lời khuyên: {row['Lời khuyên']}")
+        st.success(f"Đã tải {len(advice_list)} lời khuyên từ Sheets.")
+        return "\n".join(advice_list)
+    except Exception as e:
+        st.error(f"Lỗi tải Sheets: {e}")
+        return "Không có dữ liệu Sheets."
 
-# --- Hàm gọi Gemini API (ĐÃ ĐƠN GIẢN HÓA) ---
-def call_gemini_api(user_prompt, history):
-    """Gửi yêu cầu đến Gemini API và trả về phản hồi."""
-    headers = {"Content-Type": "application/json"}
-    
-    # SỬA LẠI PROMPT: Hướng dẫn AI trở thành một chatbot trò chuyện thông thường
-    system_prompt = """
-Bạn là một trợ lý AI hữu ích tên là chí thiện ngu, thông minh và thân thiện. 
-Nhiệm vụ của bạn là trò chuyện với người dùng một cách tự nhiên và trả lời các câu hỏi của họ về nhiều chủ đề khác nhau. 
-Hãy trả lời bằng tiếng Việt, giữ giọng điệu gần gũi và tích cực.
+# Hàm gọi Gemini API
+def call_gemini_api(prompt, history=""):
+    if GEMINI_API_KEY == "AIzaSyAS0qxMeEtdBUcLTb56m_3AmTQFpxmT_8U":
+        return "Vui lòng cấu hình API key trong Streamlit Secrets."
+    headers = {
+        "Content-Type": "application/json"
+    }
+    data = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": f"""
+Bạn là chatbot AI thông minh, chuyên lời khuyên. 
+Dữ liệu từ Sheets: {prompt}
+Trả lời tự nhiên, thân thiện bằng tiếng Việt. Nếu không khớp, đưa lời khuyên chung.
+Giữ ngắn gọn. Hỗ trợ 'hướng dẫn' để giải thích.
+Lịch sử hội thoại: {history}
+Người dùng: {prompt}
 """
-    
-    full_prompt = f"{system_prompt}\n--- LỊCH SỬ HỘI THOẠI ---\n{history}\n--- CÂU HỎI MỚI ---\nNgười dùng: {user_prompt}"
-
-    data = {"contents": [{"parts": [{"text": full_prompt}]}]}
-    
+                    }
+                ]
+            }
+        ]
+    }
     try:
         response = requests.post(
             f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
             headers=headers,
-            json=data,
-            timeout=60
+            json=data
         )
         response.raise_for_status()
         result = response.json()
-        # Thêm kiểm tra key 'candidates' để tránh lỗi
-        if 'candidates' in result and result['candidates']:
-            return result['candidates'][0]['content']['parts'][0]['text'].strip()
-        else:
-            return "Xin lỗi, tôi không nhận được phản hồi hợp lệ. Vui lòng thử lại."
-    except requests.exceptions.HTTPError as err:
-        return f"Lỗi HTTP từ API: {err}. Phản hồi: {response.text}"
+        return result['candidates'][0]['content']['parts'][0]['text'].strip()
     except Exception as e:
-        return f"Đã xảy ra lỗi khi gọi Gemini API: {e}."
+        return f"Lỗi API: {e}. Kiểm tra key tại https://cloud.google.com/generative-ai."
 
-# --- Giao diện Streamlit (ĐÃ ĐƠN GIẢN HÓA) ---
-st.set_page_config(page_title="Trò chuyện cùng AI", page_icon="💬")
+# Streamlit App chính
+st.title("🤖 Smart Chatbot AI (Gemini-powered)")
 
-st.title("💬 Chatbot AI Đa Năng")
-st.caption("Trò chuyện về mọi chủ đề cùng Gemini")
-
-# Sidebar
+# Sidebar cho config
 with st.sidebar:
-    st.header("⚙️ Tùy chỉnh")
-    if st.button("Xóa lịch sử trò chuyện", use_container_width=True):
-        st.session_state.messages = []
+    st.header("Cấu hình")
+    sheet_key = st.text_input("Google Sheets Key (Enter cho demo)", 
+                              value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
+    if st.button("Tải lại dữ liệu Sheets"):
+        st.cache_data.clear()
         st.rerun()
+
+# Tải dữ liệu
+sheets_data = load_advice_from_sheets(sheet_key)
 
 # Khởi tạo session state cho lịch sử chat
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Chào bạn! Bạn muốn trò chuyện về chủ đề gì?"}]
+    st.session_state.messages = []
 
 # Hiển thị lịch sử chat
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Xử lý input từ người dùng
-if user_input := st.chat_input("Nhập câu hỏi của bạn..."):
-    st.session_state.messages.append({"role": "user", "content": user_input})
+# Input chat
+if prompt := st.chat_input("Nhập câu hỏi của bạn..."):
+    # Thêm user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.markdown(user_input)
+        st.markdown(prompt)
     
+    # Tạo response
     with st.chat_message("assistant"):
-        with st.spinner("🧠 AI đang suy nghĩ..."):
-            # Chỉ lấy 10 tin nhắn gần nhất làm ngữ cảnh
-            history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-10:]])
-            response = call_gemini_api(user_input, history)
-            st.markdown(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
+        history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])  # Giới hạn lịch sử
+        with st.spinner("Đang suy nghĩ..."):
+            response = call_gemini_api(sheets_data, history)
+        st.markdown(response)
+    
+    # Lưu response
+    st.session_state.messages.append({"role": "assistant", "content": response})
 
-
-
-
-
-
-
-
-
-
+# Nút clear chat
+if st.button("Xóa lịch sử chat"):
+    st.session_state.messages = []
+    st.rerun()
 
 
 
