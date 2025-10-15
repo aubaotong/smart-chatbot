@@ -18,7 +18,7 @@ def call_gemini_api(user_prompt, history):
     
     # SỬA LẠI PROMPT: Hướng dẫn AI trở thành một chatbot trò chuyện thông thường
     system_prompt = """
-Bạn là một trợ lý AI hữu ích, thông minh và thân thiện. 
+Bạn là một trợ lý AI hữu ích tên là chí thiện ngu, thông minh và thân thiện. 
 Nhiệm vụ của bạn là trò chuyện với người dùng một cách tự nhiên và trả lời các câu hỏi của họ về nhiều chủ đề khác nhau. 
 Hãy trả lời bằng tiếng Việt, giữ giọng điệu gần gũi và tích cực.
 """
@@ -81,6 +81,7 @@ if user_input := st.chat_input("Nhập câu hỏi của bạn..."):
             response = call_gemini_api(user_input, history)
             st.markdown(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
+
 
 
 
