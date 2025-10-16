@@ -29,7 +29,7 @@ def load_and_prepare_data(sheet_key):
         # Kiểm tra các cột cần thiết
         required_columns = ['Day', 'poto', 'Tình trạng lúa', 'mức độ nhiễm']
         if not all(col in df.columns for col in required_columns):
-            st.error(f"Lỗi: File Sheets phải chứa đủ các cột: {', '.join(required_columns)}")
+            st.error(f"Lỗi: File Sheets phải chứa đủ các cột: {','.join(required_columns)}")
             return None
             
         st.success(f"Đã tải và xử lý thành công {len(df)} dòng dữ liệu từ Sheets.")
@@ -136,3 +136,4 @@ if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
 if st.sidebar.button("Xóa lịch sử chat"):
     st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Bác hỏi con về tình hình cánh đồng hoặc yêu cầu con phân tích tổng quan nhé."}]
     st.rerun()
+
