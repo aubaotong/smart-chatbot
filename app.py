@@ -20,7 +20,7 @@ def load_advice_from_sheets(sheet_key):
         advice_list = []
         for row in reader:
             if 'Day' in row and 'poto' in row and 'Tình trạng lúa' in row and 'mức độ nhiễm' in row:
-                advice_list.append(f"phút giây giờ ngày tháng chủa dữ liệu tình trạng bệnh và ảnh đc chụp: {row['Câu hỏi']} | vị chí lưu file ảnh mà mô hình AI nhận biết bệnh đã xử lí : {row['poto']} | tình trạng bệnh mà lúa trên cánh đồng của người nông dân đang mắc phải (tên bệnh): {row['Tình trạng lúa']} | mức độ nhiễm được tôi chia làm 3 cấp mới nhiễm là tình trạng của bệnh vừa mới xuất hiện cần tập chung trị bệnh từ giai đoạn này tiếp theo là giai vừa ở giai đoạn này cần điều trị gắp giai cuối là nặng cần nói chia buồn cùng nông dân : {row['Câu hỏi']} ")
+                advice_list.append(f"phút giây giờ ngày tháng chủa dữ liệu tình trạng bệnh và ảnh đc chụp: {row['Day']} | vị chí lưu file ảnh mà mô hình AI nhận biết bệnh đã xử lí : {row['poto']} | tình trạng bệnh mà lúa trên cánh đồng của người nông dân đang mắc phải (tên bệnh): {row['Tình trạng lúa']} | mức độ nhiễm được tôi chia làm 3 cấp mới nhiễm là tình trạng của bệnh vừa mới xuất hiện cần tập chung trị bệnh từ giai đoạn này tiếp theo là giai vừa ở giai đoạn này cần điều trị gắp giai cuối là nặng cần nói chia buồn cùng nông dân : {row['mức độ nhiễm']} ")
         st.success(f"Đã tải {len(advice_list)} lời khuyên từ Sheets.")
         return "\n".join(advice_list)
     except Exception as e:
@@ -109,6 +109,7 @@ if prompt := st.chat_input("Chào bác con là AI CHTN con sẽ trả lời về
 if st.button("Xóa lịch sử chat"):
     st.session_state.messages = []
     st.rerun()
+
 
 
 
