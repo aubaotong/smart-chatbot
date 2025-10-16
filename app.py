@@ -29,8 +29,8 @@ def load_data_from_sheets(sheet_key):
             st.error(f"Lỗi: File Sheets phải chứa các cột: {', '.join(required_columns)}")
             return None
         # Xử lý cột 'Day' để chuẩn bị cho việc vẽ đồ thị
-        df['Date'] = pd.to_datetime(df['Day'], errors='coerce').dt.date
-        df.dropna(subset=['Date'], inplace=True) # Bỏ các dòng có ngày không hợp lệ
+        df['Day'] = pd.to_datetime(df['Day'], errors='coerce').dt.date
+        df.dropna(subset=['Day'], inplace=True) # Bỏ các dòng có ngày không hợp lệ
         st.success(f"Đã tải và xử lý {len(df)} dòng dữ liệu từ Sheets.")
         return df
     except Exception as e:
@@ -45,8 +45,8 @@ def analyze_data_summary(df):
         return "Không có dữ liệu để phân tích."
     disease_counts = df['Tình trạng lúa'].value_counts().to_string()
     severity_counts = df['mức độ nhiễm'].value_counts().to_string()
-    start_date = df['Date'].min().strftime('%Y-%m-%d')
-    end_date = df['Date'].max().strftime('%Y-%m-%d')
+    start_date = df['Day'].min().strftime('%Y-%m-%d')
+    end_date = df['Day'].max().strftime('%Y-%m-%d')
     summary_text = f"""
 **BÁO CÁO TỔNG QUAN TỰ ĐỘNG:**
 - Dữ liệu được ghi nhận từ ngày **{start_date}** đến ngày **{end_date}**.
@@ -168,3 +168,4 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con đã phân tích xong dữ liệu. Bác cần con tư vấn gì ạ?"}]
         st.rerun()
+
