@@ -123,7 +123,7 @@ if df_data is not None and not df_data.empty:
             filtered_df = df_data[
                 (df_data['Tình trạng lúa'].isin(selected_diseases)) &
                 (df_data['Day'] >= start_date) &
-                (df_data['DayDay'] <= end_date)
+                (df_data['Day'] <= end_date)
             ]
 
             # Đếm số lượng ca bệnh mỗi ngày
@@ -168,5 +168,6 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con đã phân tích xong dữ liệu. Bác cần con tư vấn gì ạ?"}]
         st.rerun()
+
 
 
