@@ -3,141 +3,136 @@ import requests
 import urllib.request
 import csv
 from io import StringIO
+import pandas as pd # Sử dụng Pandas để phân tích dữ liệu hiệu quả hơn
 
 # --- Cấu hình ---
-# Lấy API key từ Streamlit Secrets một cách an toàn
 try:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 except (FileNotFoundError, KeyError):
     st.error("Lỗi: Không tìm thấy GEMINI_API_KEY. Vui lòng thêm vào mục Secrets trong Settings.")
-    st.stop() # Dừng ứng dụng nếu không có key
+    st.stop()
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
 
-# ĐỔI TÊN HÀM và cách định dạng dữ liệu để AI dễ hiểu hơn
-@st.cache_data(ttl=100)
-def load_data_from_sheets(sheet_key):
+# --- NÂNG CẤP HÀM TẢI DỮ LIỆU ---
+# Giờ đây hàm sẽ trả về một DataFrame của Pandas để dễ dàng phân tích
+@st.cache_data(ttl=120) # Tăng thời gian cache lên 2 phút
+def load_and_prepare_data(sheet_key):
+    """Tải dữ liệu từ Google Sheets và trả về dưới dạng DataFrame của Pandas."""
+    if not sheet_key:
+        return None
     url = f"https://docs.google.com/spreadsheets/d/{sheet_key}/export?format=csv&gid=0"
     try:
-        with urllib.request.urlopen(url) as response:
-            csv_data = response.read().decode('utf-8')
-        reader = csv.DictReader(StringIO(csv_data))
-        data_list = []
-        for row in reader:
-            if 'Day' in row and 'poto' in row and 'Tình trạng lúa' in row and 'mức độ nhiễm' in row:
-                # Định dạng lại dữ liệu cho rõ ràng, dễ đọc
-                data_list.append(
-                    f"- Thời gian: {row['Day']}, Tên file ảnh: {row['poto']}, Tên bệnh: {row['Tình trạng lúa']}, Mức độ nhiễm: {row['mức độ nhiễm']}"
-                )
-        st.success(f"Đã tải {len(data_list)} dòng dữ liệu từ Sheets.")
-        return "\n".join(data_list)
+        # Sử dụng Pandas để đọc CSV trực tiếp từ URL, mạnh mẽ và ổn định hơn
+        df = pd.read_csv(url)
+        
+        # Kiểm tra các cột cần thiết
+        required_columns = ['Day', 'poto', 'Tình trạng lúa', 'mức độ nhiễm']
+        if not all(col in df.columns for col in required_columns):
+            st.error(f"Lỗi: File Sheets phải chứa đủ các cột: {', '.join(required_columns)}")
+            return None
+            
+        st.success(f"Đã tải và xử lý thành công {len(df)} dòng dữ liệu từ Sheets.")
+        return df
     except Exception as e:
-        st.error(f"Lỗi tải Sheets: {e}")
-        return "Không có dữ liệu Sheets."
+        st.error(f"Lỗi khi tải hoặc xử lý dữ liệu từ Sheets: {e}")
+        return None
 
-# --- THAY ĐỔI LỚN NHẤT: SỬA LẠI "BỘ NÃO" CỦA AI ---
-# Hàm gọi Gemini API đã được cập nhật để nhận cả dữ liệu Sheets và câu hỏi của người dùng
-def call_gemini_api(sheets_data, user_prompt, history=""):
-    if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_API_KEY_HERE":
-        return "Vui lòng cấu hình API key trong Streamlit Secrets."
-    
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    # Đây là "bộ não" của AI, ra lệnh cho nó cách hành xử
+# --- NÂNG CẤP "BỘ NÃO" CỦA AI ---
+def call_gemini_api(dataframe, user_prompt, history=""):
+    """Hàm gọi API Gemini với nhiệm vụ phân tích dữ liệu tổng quan."""
+    if dataframe is None or dataframe.empty:
+        return "Con chưa có dữ liệu từ Google Sheets để phân tích ạ. Bác vui lòng kiểm tra lại Sheet Key."
+
+    # 1. Tự động tạo một bản tóm tắt dữ liệu
+    # Đếm số lần xuất hiện của mỗi bệnh
+    disease_counts = dataframe['Tình trạng lúa'].value_counts().to_string()
+    # Đếm số lần xuất hiện của mỗi mức độ nhiễm
+    severity_counts = dataframe['mức độ nhiễm'].value_counts().to_string()
+    # Ngày bắt đầu và kết thúc
+    start_date = pd.to_datetime(dataframe['Day']).min().strftime('%Y-%m-%d')
+    end_date = pd.to_datetime(dataframe['Day']).max().strftime('%Y-%m-%d')
+
+    # 2. Tạo prompt hệ thống mới, thông minh hơn
     system_prompt = f"""
-Bạn là chatbot AI thông minh tên là CHTN, một chuyên gia về nông nghiệp lúa nước.
-Nhiệm vụ của bạn là trả lời câu hỏi của người nông dân một cách chính xác dựa vào dữ liệu được cung cấp dưới đây.
+Bạn là CHTN, một trợ lý AI nông nghiệp chuyên sâu. Nhiệm vụ của bạn là phân tích dữ liệu về tình trạng lúa và cung cấp một báo cáo súc tích, dễ hiểu cho người nông dân.
 
 ---
-**DỮ LIỆU TỪ GOOGLE SHEETS:**
-{sheets_data}
+**BÁO CÁO TỔNG QUAN TỰ ĐỘNG:**
+
+Dữ liệu được ghi nhận từ ngày **{start_date}** đến ngày **{end_date}**.
+
+**1. Thống kê các loại bệnh:**
+{disease_counts}
+
+**2. Thống kê mức độ nhiễm:**
+{severity_counts}
 ---
 
-Hãy phân tích dữ liệu trên và lịch sử hội thoại để trả lời câu hỏi của người dùng.
-- Trả lời bằng tiếng Việt, với giọng văn tự nhiên, lễ phép và thân thiện.
-- Giữ câu trả lời ngắn gọn, đi thẳng vào vấn đề.
-- Nếu dữ liệu không có thông tin để trả lời, hãy nói rằng "Con không tìm thấy thông tin này trong dữ liệu ạ."
+**NHIỆM VỤ CỦA BẠN:**
+
+Dựa vào **BÁO CÁO TỔNG QUAN** ở trên và lịch sử trò chuyện, hãy trả lời câu hỏi của người dùng.
+
+* **Nếu người dùng hỏi chung chung** (ví dụ: "tình hình thế nào?", "phân tích cho tôi", "báo cáo đi"), hãy diễn giải lại **BÁO CÁO TỔNG QUAN** bằng lời văn tự nhiên, thân thiện. Đưa ra nhận định quan trọng nhất (ví dụ: "Bệnh đạo ôn đang xuất hiện nhiều nhất ạ") và đề xuất hành động nếu cần.
+* **Nếu người dùng hỏi câu hỏi cụ thể**, hãy sử dụng báo cáo để trả lời chính xác câu hỏi đó.
+* Luôn trả lời bằng tiếng Việt, giọng văn lễ phép, gần gũi.
 
 Lịch sử hội thoại:
 {history}
 
-Câu hỏi của người dùng: {user_prompt}
+Câu hỏi của người dùng: "{user_prompt}"
 """
 
-    data = {
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "text": system_prompt
-                    }
-                ]
-            }
-        ]
-    }
+    headers = {"Content-Type": "application/json"}
+    data = {"contents": [{"parts": [{"text": system_prompt}]}]}
+
     try:
         response = requests.post(
             f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
             headers=headers,
             json=data,
-            timeout=60 # Thêm timeout để tránh chờ quá lâu
+            timeout=90
         )
         response.raise_for_status()
         result = response.json()
         return result['candidates'][0]['content']['parts'][0]['text'].strip()
-    except requests.exceptions.HTTPError as err:
-        return f"Lỗi HTTP từ API: {err}"
     except Exception as e:
-        return f"Lỗi khi gọi API: {e}. Hãy kiểm tra API Key và kết nối mạng."
+        return f"Lỗi khi gọi API: {e}"
 
 # --- Giao diện ứng dụng Streamlit ---
 st.title("🤖 Chatbot Nông Nghiệp CHTN")
 
-# Sidebar cho cấu hình
 with st.sidebar:
     st.header("Cấu hình")
-    # Sử dụng sheet key demo của bạn
-    sheet_key = st.text_input("Google Sheets Key", 
-                            value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
+    sheet_key = st.text_input("Google Sheets Key", value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
     if st.button("Tải lại dữ liệu Sheets"):
         st.cache_data.clear()
-        st.success("Đã xóa cache, dữ liệu sẽ được tải lại.")
         st.rerun()
 
-# Tải dữ liệu (sử dụng tên hàm mới)
-sheets_data = load_data_from_sheets(sheet_key)
+# Tải và chuẩn bị dữ liệu
+df_data = load_and_prepare_data(sheet_key)
 
-# Khởi tạo session state cho lịch sử chat
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Bác cần con tra cứu thông tin gì về cánh đồng ạ?"}]
+    st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Bác hỏi con về tình hình cánh đồng hoặc yêu cầu con phân tích tổng quan nhé."}]
 
-# Hiển thị lịch sử chat
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Input chat
-if user_input := st.chat_input("Bác hãy nhập câu hỏi vào đây..."):
-    # Thêm tin nhắn của người dùng vào lịch sử
+if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
-    
-    # Tạo và hiển thị phản hồi của AI
+
     with st.chat_message("assistant"):
-        with st.spinner("Con đang tìm thông tin..."):
+        with st.spinner("Con đang phân tích toàn bộ dữ liệu..."):
             history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-            # SỬA LẠI CÁCH GỌI HÀM: Truyền cả sheets_data và user_input
-            response = call_gemini_api(sheets_data, user_input, history)
+            # Gọi hàm API đã được nâng cấp
+            response = call_gemini_api(df_data, user_input, history)
             st.markdown(response)
-    
-    # Lưu phản hồi của AI vào lịch sử
+
     st.session_state.messages.append({"role": "assistant", "content": response})
 
-# Nút xóa lịch sử chat
 if st.sidebar.button("Xóa lịch sử chat"):
-    st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Bác cần con tra cứu thông tin gì về cánh đồng ạ?"}]
+    st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Bác hỏi con về tình hình cánh đồng hoặc yêu cầu con phân tích tổng quan nhé."}]
     st.rerun()
-
