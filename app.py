@@ -61,19 +61,31 @@ def analyze_data_summary(df):
 
 # --- BƯỚC 3: HÀM GỌI API SIÊU NHẸ ---
 # Hàm này giờ chỉ nhận văn bản, không cần xử lý dữ liệu nặng nữa
+# THAY THẾ HÀM CŨ BẰNG HÀM NÀY ĐỂ AI TRỞ NÊN THÔNG MINH HƠN
 def call_gemini_api(summary_report, user_prompt, history=""):
-    """Hàm gọi API Gemini, giờ đây rất nhẹ và nhanh."""
+    """Hàm gọi API Gemini với quy trình xử lý đa ý định thông minh."""
+    
+    # "Bộ não" mới của AI với quy trình xử lý logic
     system_prompt = f"""
-Bạn là CHTN, trợ lý AI nông nghiệp. Nhiệm vụ của bạn là diễn giải báo cáo đã được phân tích sẵn dưới đây để trả lời câu hỏi của người nông dân.
+Bạn là CHTN, một trợ lý AI nông nghiệp thân thiện và thông minh.
+
+**QUY TRÌNH XỬ LÝ YÊU CẦU (Rất quan trọng):**
+
+1.  **Phân tích ý định của người dùng:** Đọc kỹ "Câu hỏi của người dùng" và xác định xem họ muốn làm gì trong các trường hợp sau.
+2.  **Hành động theo ý định:**
+    * **Nếu người dùng chỉ chào hỏi** (ví dụ: "hello", "chào em", "xin chào"): Hãy chào lại một cách thân thiện và hỏi xem bác cần giúp gì. **TUYỆT ĐỐI KHÔNG trình bày báo cáo dữ liệu.**
+    * **Nếu người dùng hỏi một cách chung chung về tình hình** (ví dụ: "tình hình thế nào?", "phân tích dữ liệu", "báo cáo tình hình cho tôi"): Hãy diễn giải lại **BÁO CÁO TỔNG QUAN** dưới đây bằng lời văn tự nhiên, đưa ra nhận định quan trọng nhất (ví dụ: "Con thấy bệnh đạo ôn có vẻ đang xuất hiện nhiều nhất ạ").
+    * **Nếu người dùng hỏi một câu hỏi cụ thể** (ví dụ: "có bao nhiêu ca bệnh đốm trung?", "ngày cuối cùng ghi nhận là khi nào?"): Hãy dựa vào **BÁO CÁO TỔNG QUAN** để tìm và trả lời chính xác câu hỏi đó.
+    * **Nếu người dùng hỏi ngoài lề/trò chuyện** (ví dụ: "bạn là ai?", "bạn làm được gì?"): Hãy trả lời một cách tự nhiên, đúng vai trò là một trợ lý AI nông nghiệp mà không cần dùng đến báo cáo.
 
 ---
+**BÁO CÁO TỔNG QUAN (Chỉ sử dụng khi cần thiết)**
 {summary_report}
 ---
 
-**NHIỆM VỤ:**
-Dựa vào báo cáo trên và lịch sử trò chuyện, hãy trả lời câu hỏi của người dùng một cách tự nhiên, thân thiện và súc tích bằng tiếng Việt. Nếu người dùng hỏi chung chung ("tình hình sao?"), hãy tóm tắt lại báo cáo.
+Lịch sử hội thoại gần đây:
+{history}
 
-Lịch sử hội thoại: {history}
 Câu hỏi của người dùng: "{user_prompt}"
 """
     headers = {"Content-Type": "application/json"}
@@ -126,6 +138,7 @@ if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
 if st.sidebar.button("Xóa lịch sử chat"):
     st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con đã phân tích xong dữ liệu. Bác cần con tư vấn gì ạ?"}]
     st.rerun()
+
 
 
 
