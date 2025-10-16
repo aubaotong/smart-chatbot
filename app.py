@@ -71,7 +71,7 @@ st.title(" Chatbot AI CHTN 👻 ")
 with st.sidebar:
     st.header("Cấu hình")
     sheet_key = st.text_input("Google Sheets Key (Enter cho demo)", 
-                            value="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms")
+                            value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
     if st.button("Tải lại dữ liệu Sheets"):
         st.cache_data.clear()
         st.rerun()
@@ -109,6 +109,7 @@ if prompt := st.chat_input("Chào bác con là AI CHTN con sẽ trả lời về
 if st.button("Xóa lịch sử chat"):
     st.session_state.messages = []
     st.rerun()
+
 
 
 
