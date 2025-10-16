@@ -30,13 +30,13 @@ def load_data_from_sheets(sheet_key):
     try:
         df = pd.read_csv(url)
         df.columns = df.columns.str.strip()
-        required_columns = ['Day', 'Tình trạng lúa', 'mức độ nhiễm']
+        required_columns = ['Date', 'Tình trạng lúa', 'mức độ nhiễm']
         if not all(col in df.columns for col in required_columns):
             st.error(f"Lỗi: File Sheets phải chứa các cột: {', '.join(required_columns)}")
             return pd.DataFrame()
         
         # Tạo cột 'Date' chỉ chứa ngày để lọc và vẽ biểu đồ
-        df['Date'] = pd.to_datetime(df['Day'], errors='coerce').dt.date
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
         df.dropna(subset=['Date'], inplace=True)
         st.success(f"Đã tải và xử lý {len(df)} dòng dữ liệu từ Sheets.")
         return df
@@ -210,3 +210,4 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con đã phân tích xong dữ liệu. Bác có thể hỏi con hoặc mở bảng điều khiển ở trên để xem chi tiết."}]
         st.rerun()
+
