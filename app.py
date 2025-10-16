@@ -120,8 +120,8 @@ def analyze_data_summary(df):
     # ... (giữ nguyên logic của hàm này)
     disease_counts = df['Tình trạng lúa'].value_counts().to_string()
     severity_counts = df['mức độ nhiễm'].value_counts().to_string()
-    start_date = pd.to_datetime(df['Day'], errors='coerce').min().strftime('%Y-%m-%d')
-    end_date = pd.to_datetime(df['Day'], errors='coerce').max().strftime('%Y-%m-%d')
+    start_date = pd.to_datetime(df['Date'], errors='coerce').min().strftime('%Y-%m-%d')
+    end_date = pd.to_datetime(df['Date'], errors='coerce').max().strftime('%Y-%m-%d')
     summary_text = f"Dữ liệu từ {start_date} đến {end_date}.\nBệnh:\n{disease_counts}\nMức độ:\n{severity_counts}"
     return summary_text
 # --- Giao diện ứng dụng Streamlit ---
@@ -193,4 +193,5 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
         st.rerun()
+
 
