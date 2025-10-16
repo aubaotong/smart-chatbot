@@ -12,7 +12,7 @@ except (FileNotFoundError, KeyError):
     st.error("Lỗi: Không tìm thấy GEMINI_API_KEY. Vui lòng thêm vào mục Secrets trong Settings.")
     st.stop() # Dừng ứng dụng nếu không có key
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
 
 # ĐỔI TÊN HÀM và cách định dạng dữ liệu để AI dễ hiểu hơn
 @st.cache_data(ttl=100)
@@ -140,3 +140,4 @@ if user_input := st.chat_input("Bác hãy nhập câu hỏi vào đây..."):
 if st.sidebar.button("Xóa lịch sử chat"):
     st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Bác cần con tra cứu thông tin gì về cánh đồng ạ?"}]
     st.rerun()
+
