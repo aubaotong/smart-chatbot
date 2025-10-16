@@ -104,8 +104,8 @@ if df_data is not None and not df_data.empty:
         )
 
         # Lấy ngày bắt đầu và kết thúc từ dữ liệu
-        min_date = df_data['Date'].min()
-        max_date = df_data['Date'].max()
+        min_date = df_data['Day'].min()
+        max_date = df_data['Day'].max()
 
         # Tạo widget slider để người dùng chọn khoảng thời gian
         date_range = st.slider(
@@ -122,15 +122,15 @@ if df_data is not None and not df_data.empty:
             # Lọc dữ liệu dựa trên lựa chọn của người dùng
             filtered_df = df_data[
                 (df_data['Tình trạng lúa'].isin(selected_diseases)) &
-                (df_data['Date'] >= start_date) &
-                (df_data['Date'] <= end_date)
+                (df_data['Day'] >= start_date) &
+                (df_data['DayDay'] <= end_date)
             ]
 
             # Đếm số lượng ca bệnh mỗi ngày
-            chart_data = filtered_df.groupby(['Date', 'Tình trạng lúa']).size().reset_index(name='Số ca')
+            chart_data = filtered_df.groupby(['Day', 'Tình trạng lúa']).size().reset_index(name='Số ca')
             
             # Chuyển đổi dữ liệu để vẽ biểu đồ (mỗi bệnh một cột)
-            chart_data_pivot = chart_data.pivot(index='Date', columns='Tình trạng lúa', values='Số ca').fillna(0)
+            chart_data_pivot = chart_data.pivot(index='Day', columns='Tình trạng lúa', values='Số ca').fillna(0)
 
             st.write(f"Biểu đồ số ca bệnh từ ngày {start_date.strftime('%d/%m/%Y')} đến {end_date.strftime('%d/%m/%Y')}")
             st.line_chart(chart_data_pivot)
@@ -168,4 +168,5 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con đã phân tích xong dữ liệu. Bác cần con tư vấn gì ạ?"}]
         st.rerun()
+
 
