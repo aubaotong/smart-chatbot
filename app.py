@@ -12,7 +12,7 @@ except (FileNotFoundError, KeyError):
     st.stop()
 
 # SỬ DỤNG MODEL MỚI NHẤT VÀ NHANH NHẤT CỦA GEMINI
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-22.5-flash-latest:generateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-latest:generateContent"
 
 # --- BƯỚC 1: TẢI VÀ CHUẨN BỊ DỮ LIỆU (Giữ nguyên) ---
 @st.cache_data(ttl=300) # Tăng thời gian cache lên 5 phút
@@ -126,4 +126,5 @@ if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
 if st.sidebar.button("Xóa lịch sử chat"):
     st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con đã phân tích xong dữ liệu. Bác cần con tư vấn gì ạ?"}]
     st.rerun()
+
 
