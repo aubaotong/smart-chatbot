@@ -137,3 +137,4 @@ if st.sidebar.button("Xóa lịch sử chat"):
     st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Bác hỏi con về tình hình cánh đồng hoặc yêu cầu con phân tích tổng quan nhé."}]
     st.rerun()
 
+
