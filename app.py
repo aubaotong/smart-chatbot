@@ -41,7 +41,7 @@ def calculate_disease_scores(df):
     if df is None or df.empty:
         return pd.DataFrame(), []
 
-    # Lọc bỏ các trạng thái không phải là bệnh
+    # Lọc bỏ các trạng thái không phải là bệnh để theo dõi
     disease_names = [d for d in df['Tình trạng lúa'].unique() if d not in ['healthy', 'Khỏe mạnh', 'Không xác định']]
     
     # Khởi tạo điểm số
@@ -54,12 +54,13 @@ def calculate_disease_scores(df):
         tinh_trang = row['Tình trạng lúa']
         muc_do = row['mức độ nhiễm']
         
-        # Logic 1: Giảm điểm nếu có báo cáo "không nhiễm bệnh"
-        if muc_do == 'không nhiễm bệnh':
+        # --- SỬA LỖI LOGIC ---
+        # Giảm điểm cho TẤT CẢ các bệnh nếu có báo cáo là lúa khỏe mạnh hoặc không nhiễm bệnh.
+        if tinh_trang in ['healthy', 'Khỏe mạnh'] or muc_do == 'không nhiễm bệnh':
             for disease in scores:
                 scores[disease] = max(0, scores[disease] - 1)
         
-        # Logic 2: Tăng điểm dựa trên mức độ nhiễm của từng bệnh cụ thể trong hàng đó
+        # Tăng điểm chỉ khi báo cáo ghi nhận một bệnh cụ thể.
         elif tinh_trang in disease_names:
             if muc_do == 'Mới nhiễm':
                 scores[tinh_trang] += 3
@@ -69,7 +70,6 @@ def calculate_disease_scores(df):
                 scores[tinh_trang] += 9
         
         # Ghi lại điểm số tại thời điểm của hàng dữ liệu này
-        # Thêm một cột 'Record_ID' để đảm bảo mỗi điểm dữ liệu là duy nhất trên biểu đồ
         current_scores = {'Record_ID': index, 'Date': date, **scores}
         scores_over_time.append(current_scores)
 
@@ -149,12 +149,10 @@ if scores_df is not None and not scores_df.empty:
         filtered_df = scores_df[(scores_df['Date'] >= start_date) & (scores_df['Date'] <= end_date)]
 
         if not filtered_df.empty:
-            # Chuyển đổi dữ liệu, bỏ cột Record_ID khỏi melt
             scores_melted = filtered_df.melt(id_vars=['Record_ID', 'Date'], var_name='Tên bệnh', value_name='Điểm nguy hiểm')
 
             rule = alt.Chart(pd.DataFrame({'y': [5]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y')
 
-            # --- CẬP NHẬT LOGIC: Trục X giờ sẽ là Record_ID để thể hiện từng điểm dữ liệu ---
             line_chart = alt.Chart(scores_melted).mark_line().encode(
                 x=alt.X('Record_ID', title='Dòng dữ liệu (theo thời gian)'),
                 y=alt.Y('Điểm nguy hiểm', scale=alt.Scale(domain=[0, 10])),
