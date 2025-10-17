@@ -27,7 +27,6 @@ def load_data_from_sheets(sheet_key):
         if not all(col in df.columns for col in required_columns):
             st.error(f"Lỗi: File Sheets phải chứa các cột: {', '.join(required_columns)}")
             return None
-        # --- CẬP NHẬT: Chuyển đổi sang đối tượng date, không phải datetime ---
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
         df.dropna(subset=['Date'], inplace=True)
         st.success(f"Đã tải và xử lý {len(df)} dòng dữ liệu từ Sheets.")
@@ -36,7 +35,7 @@ def load_data_from_sheets(sheet_key):
         st.error(f"Lỗi tải dữ liệu từ Sheets: {e}")
         return None
 
-# --- LOGIC MỚI: TÍNH TOÁN ĐIỂM NGUY HIỂM CHO BỆNH ---
+# --- CẬP NHẬT LOGIC: TÍNH ĐIỂM THEO TỪNG HÀNG DỮ LIỆU ---
 @st.cache_data
 def calculate_disease_scores(df):
     if df is None or df.empty:
@@ -49,42 +48,39 @@ def calculate_disease_scores(df):
     scores = {name: 0 for name in disease_names}
     scores_over_time = []
     
-    # Lấy danh sách các ngày duy nhất đã được sắp xếp
-    unique_dates = sorted(df['Date'].unique())
-
-    for date in unique_dates:
-        daily_data = df[df['Date'] == date]
+    # Duyệt qua từng hàng trong DataFrame đã được sắp xếp theo ngày
+    for index, row in df.iterrows():
+        date = row['Date']
+        tinh_trang = row['Tình trạng lúa']
+        muc_do = row['mức độ nhiễm']
         
         # Logic 1: Giảm điểm nếu có báo cáo "không nhiễm bệnh"
-        if 'không nhiễm bệnh' in daily_data['mức độ nhiễm'].values:
+        if muc_do == 'không nhiễm bệnh':
             for disease in scores:
                 scores[disease] = max(0, scores[disease] - 1)
-
-        # Logic 2: Tăng điểm dựa trên mức độ nhiễm của từng bệnh
-        for disease in disease_names:
-            disease_data = daily_data[daily_data['Tình trạng lúa'] == disease]
-            if not disease_data.empty:
-                for _, row in disease_data.iterrows():
-                    level = row['mức độ nhiễm']
-                    if level == 'Mới nhiễm':
-                        scores[disease] += 3
-                    elif level == 'Nhiễm vừa':
-                        scores[disease] += 4
-                    elif level == 'Nhiễm nặng':
-                        scores[disease] += 9
         
-        # Ghi lại điểm số của ngày hôm đó
-        daily_scores = {'Date': date, **scores}
-        scores_over_time.append(daily_scores)
+        # Logic 2: Tăng điểm dựa trên mức độ nhiễm của từng bệnh cụ thể trong hàng đó
+        elif tinh_trang in disease_names:
+            if muc_do == 'Mới nhiễm':
+                scores[tinh_trang] += 3
+            elif muc_do == 'Nhiễm vừa':
+                scores[tinh_trang] += 4
+            elif muc_do == 'Nhiễm nặng':
+                scores[tinh_trang] += 9
+        
+        # Ghi lại điểm số tại thời điểm của hàng dữ liệu này
+        # Thêm một cột 'Record_ID' để đảm bảo mỗi điểm dữ liệu là duy nhất trên biểu đồ
+        current_scores = {'Record_ID': index, 'Date': date, **scores}
+        scores_over_time.append(current_scores)
 
     scores_df = pd.DataFrame(scores_over_time)
     
-    # Kiểm tra cảnh báo
+    # Kiểm tra cảnh báo dựa trên điểm số cuối cùng
     warnings = []
     if not scores_df.empty:
-        last_day_scores = scores_df.iloc[-1]
-        for disease, score in last_day_scores.items():
-            if disease != 'Date' and score > 5:
+        last_scores = scores_df.iloc[-1]
+        for disease, score in last_scores.items():
+            if disease not in ['Record_ID', 'Date'] and score > 5:
                 warnings.append(f"Bệnh '{disease}' đã vượt ngưỡng cảnh báo với {score} điểm!")
 
     return scores_df, warnings
@@ -136,14 +132,9 @@ data_summary_for_chatbot = analyze_data_summary(df_data)
 if scores_df is not None and not scores_df.empty:
     with st.expander("📈 Xem biểu đồ điểm nguy hiểm của bệnh", expanded=True):
         
-        # --- MỚI: Giới hạn (cap) giá trị điểm không vượt quá 10 ---
-        # Lấy danh sách các cột bệnh (tất cả các cột trừ cột 'Date')
-        disease_cols = [col for col in scores_df.columns if col != 'Date']
-        # Áp dụng giới hạn: bất kỳ giá trị nào > 10 sẽ được đặt thành 10
+        disease_cols = [col for col in scores_df.columns if col not in ['Date', 'Record_ID']]
         scores_df[disease_cols] = scores_df[disease_cols].clip(upper=10)
-        # -----------------------------------------------------------
 
-        # --- MỚI: Thêm thanh trượt để chọn khoảng ngày ---
         min_date = scores_df['Date'].min()
         max_date = scores_df['Date'].max()
         
@@ -151,44 +142,37 @@ if scores_df is not None and not scores_df.empty:
             "Chọn khoảng ngày bạn muốn xem:",
             min_value=min_date,
             max_value=max_date,
-            value=(min_date, max_date), # Giá trị mặc định là toàn bộ khoảng thời gian
-            format="DD/MM/YYYY" # Định dạng ngày tháng cho dễ nhìn
+            value=(min_date, max_date),
+            format="DD/MM/YYYY"
         )
 
-        # Lọc DataFrame dựa trên lựa chọn từ thanh trượt
         filtered_df = scores_df[(scores_df['Date'] >= start_date) & (scores_df['Date'] <= end_date)]
-        # ----------------------------------------------------
 
         if not filtered_df.empty:
-            # Chuyển đổi dữ liệu đã lọc từ dạng rộng sang dạng dài để Altair xử lý
-            scores_melted = filtered_df.melt('Date', var_name='Tên bệnh', value_name='Điểm nguy hiểm')
+            # Chuyển đổi dữ liệu, bỏ cột Record_ID khỏi melt
+            scores_melted = filtered_df.melt(id_vars=['Record_ID', 'Date'], var_name='Tên bệnh', value_name='Điểm nguy hiểm')
 
-            # Đường giới hạn cảnh báo màu đỏ
             rule = alt.Chart(pd.DataFrame({'y': [5]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y')
 
-            # Biểu đồ đường
+            # --- CẬP NHẬT LOGIC: Trục X giờ sẽ là Record_ID để thể hiện từng điểm dữ liệu ---
             line_chart = alt.Chart(scores_melted).mark_line().encode(
-                x=alt.X('Date', title='Ngày'),
-                y=alt.Y('Điểm nguy hiểm', scale=alt.Scale(domain=[0, 10])), # Giữ nguyên giới hạn trục Y từ 0 đến 10
+                x=alt.X('Record_ID', title='Dòng dữ liệu (theo thời gian)'),
+                y=alt.Y('Điểm nguy hiểm', scale=alt.Scale(domain=[0, 10])),
                 color='Tên bệnh',
                 tooltip=['Date', 'Tên bệnh', 'Điểm nguy hiểm']
             ).interactive()
 
-            # Kết hợp biểu đồ và đường giới hạn
             final_chart = (line_chart + rule).properties(
-                title='Diễn biến điểm nguy hiểm của các loại bệnh theo thời gian'
+                title='Diễn biến điểm nguy hiểm của các loại bệnh theo từng cập nhật'
             )
 
             st.altair_chart(final_chart, use_container_width=True)
         else:
-            # Thông báo nếu không có dữ liệu trong khoảng ngày đã chọn
             st.warning("Không có dữ liệu để hiển thị trong khoảng ngày đã chọn.")
-
 
 # --- Giao diện Chatbot ---
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
-    # Thêm cảnh báo vào tin nhắn đầu tiên nếu có
     if warnings:
         warning_text = "⚠️ **CẢNH BÁO KHẨN!**\n\n" + "\n".join(f"- {w}" for w in warnings)
         st.session_state.messages.append({"role": "assistant", "content": warning_text})
