@@ -1,9 +1,13 @@
 import streamlit as st
 import requests
 import pandas as pd
-from io import StringIO
+from io import StringIO, BytesIO
 import urllib.request
-import altair as alt # Sử dụng thư viện Altair để vẽ biểu đồ nâng cao
+import altair as alt
+from streamlit_mic_recorder import mic_recorder
+import speech_recognition as sr
+from gtts import gTTS # THÊM MỚI: Thư viện chuyển văn bản thành giọng nói
+import base64 # THÊM MỚI: Để xử lý auto-play audio
 
 # --- Cấu hình ---
 try:
@@ -12,9 +16,33 @@ except (FileNotFoundError, KeyError):
     st.error("Lỗi: Không tìm thấy GEMINI_API_KEY. Vui lòng thêm vào mục Secrets.")
     st.stop()
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
 
-# --- Tải và chuẩn bị dữ liệu ---
+# --- THÊM MỚI: HÀM TỰ ĐỘNG PHÁT ÂM THANH ---
+def autoplay_audio(audio_bytes: bytes):
+    """Hàm để tự động phát âm thanh trong Streamlit."""
+    b64 = base64.b64encode(audio_bytes).decode()
+    md = f"""
+        <audio controls autoplay="true" style="display:none;">
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+        </audio>
+        """
+    st.markdown(md, unsafe_allow_html=True)
+
+# --- THÊM MỚI: HÀM CHUYỂN VĂN BẢN THÀNH GIỌNG NÓI ---
+def text_to_speech(text):
+    """Sử dụng gTTS để chuyển văn bản thành file âm thanh (dạng bytes)."""
+    try:
+        tts = gTTS(text=text, lang='vi', slow=False)
+        audio_fp = BytesIO()
+        tts.write_to_fp(audio_fp)
+        audio_fp.seek(0)
+        return audio_fp.read()
+    except Exception as e:
+        st.error(f"Lỗi khi chuyển văn bản thành giọng nói: {e}")
+        return None
+
+# --- Tải và chuẩn bị dữ liệu (Không thay đổi) ---
 @st.cache_data(ttl=300)
 def load_data_from_sheets(sheet_key):
     if not sheet_key:
@@ -30,12 +58,12 @@ def load_data_from_sheets(sheet_key):
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
         df.dropna(subset=['Date'], inplace=True)
         st.success(f"Đã tải và xử lý {len(df)} dòng dữ liệu từ Sheets.")
-        return df.sort_values(by='Date') # Sắp xếp dữ liệu theo ngày
+        return df.sort_values(by='Date')
     except Exception as e:
         st.error(f"Lỗi tải dữ liệu từ Sheets: {e}")
         return None
 
-# --- LOGIC TÍNH ĐIỂM ---
+# --- LOGIC TÍNH ĐIỂM (Không thay đổi) ---
 @st.cache_data
 def calculate_disease_scores(df):
     if df is None or df.empty:
@@ -61,7 +89,6 @@ def calculate_disease_scores(df):
             elif muc_do == 'Nhiễm nặng':
                 scores[tinh_trang] += 9
         
-        # --- CẬP NHẬT: Giới hạn điểm ngay trong vòng lặp ---
         for disease in scores:
              if scores[disease] > 10: scores[disease] = 10
              if scores[disease] < 0: scores[disease] = 0
@@ -80,28 +107,24 @@ def calculate_disease_scores(df):
 
     return scores_df, warnings
 
-# --- CẢI TIẾN: Hàm phân tích dữ liệu biểu đồ cho AI ---
+# --- HÀM PHÂN TÍCH DỮ LIỆU BIỂU ĐỒ CHO AI (Không thay đổi) ---
 def analyze_scores_for_chatbot(scores_df):
     if scores_df is None or scores_df.empty:
         return "Hiện không có dữ liệu điểm nguy hiểm để phân tích."
 
-    # Lấy dữ liệu mới nhất
     latest_scores = scores_df.iloc[-1]
     latest_date = latest_scores['Date'].strftime('%d-%m-%Y')
     disease_cols = [col for col in scores_df.columns if col not in ['Date', 'Record_ID']]
     
-    # Xây dựng báo cáo
     summary_text = f"Báo cáo phân tích diễn biến điểm nguy hiểm (tính đến ngày {latest_date}):\n\n"
     summary_text += "**1. Điểm số hiện tại:**\n"
     for disease in disease_cols:
         score = latest_scores[disease]
         summary_text += f"- {disease}: {score} điểm.\n"
 
-    # Phân tích xu hướng (dựa trên 5 điểm dữ liệu cuối)
     summary_text += "\n**2. Phân tích xu hướng gần đây:**\n"
     if len(scores_df) > 1:
         for disease in disease_cols:
-            # Lấy 5 giá trị cuối, nếu không đủ thì lấy hết
             recent_scores = scores_df[disease].tail(5)
             if len(recent_scores) > 2:
                 trend_start = recent_scores.iloc[0]
@@ -120,7 +143,7 @@ def analyze_scores_for_chatbot(scores_df):
 
     return summary_text
 
-# --- CẢI TIẾN: Cập nhật prompt để AI "đọc" biểu đồ ---
+# --- HÀM GỌI API GEMINI (Không thay đổi) ---
 def call_gemini_api(summary_report, user_prompt, history=""):
     system_prompt = f"""
 Bạn là CHTN, một trợ lý AI nông nghiệp chuyên phân tích biểu đồ và dữ liệu diễn biến. Dựa vào "Báo cáo phân tích diễn biến điểm nguy hiểm" dưới đây, hãy trả lời người dùng như một chuyên gia.
@@ -148,16 +171,38 @@ Câu hỏi của người dùng: "{user_prompt}"
     except Exception as e:
         return f"Lỗi gọi API: {e}"
 
+# --- HÀM CHUYỂN GIỌNG NÓI THÀNH VĂN BẢN (Không thay đổi) ---
+def transcribe_audio(audio_bytes):
+    if not audio_bytes:
+        return None
+    
+    recognizer = sr.Recognizer()
+    try:
+        audio_io = BytesIO(audio_bytes)
+        with sr.AudioFile(audio_io) as source:
+            audio_data = recognizer.record(source)
+        
+        text = recognizer.recognize_google(audio_data, language='vi-VN')
+        return text
+    except sr.UnknownValueError:
+        st.warning("Xin lỗi, con không nghe rõ bác nói gì. Bác thử nói lại được không ạ?")
+        return None
+    except sr.RequestError as e:
+        st.error(f"Lỗi kết nối tới dịch vụ nhận dạng giọng nói: {e}")
+        return None
+    except Exception as e:
+        st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
+        return None
+
 # --- Giao diện ứng dụng Streamlit ---
-st.title("WED HỆ THỐNG GIÁM SÁT & CHUẨN ĐOÁN BỆNH Ở LÚA CHTN")
+st.title("HỆ THỐNG GIÁM SÁT & CHẨN ĐOÁN BỆNH LÚA CHTN")
 
 # --- LUỒNG XỬ LÝ CHÍNH ---
 df_data = load_data_from_sheets("1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
 scores_df, warnings = calculate_disease_scores(df_data)
-# --- CẢI TIẾN: Sử dụng hàm phân tích mới cho chatbot ---
 data_for_chatbot = analyze_scores_for_chatbot(scores_df)
 
-# --- HIỂN THỊ BIỂU ĐỒ NGUY HIỂM ---
+# --- HIỂN THỊ BIỂU ĐỒ (Không thay đổi) ---
 if scores_df is not None and not scores_df.empty:
     with st.expander("Xem biểu đồ điểm nguy hiểm của bệnh", expanded=True):
         min_date = scores_df['Date'].min()
@@ -170,25 +215,18 @@ if scores_df is not None and not scores_df.empty:
             value=(min_date, max_date),
             format="DD/MM/YYYY"
         )
-
         filtered_df = scores_df[(scores_df['Date'] >= start_date) & (scores_df['Date'] <= end_date)]
 
         if not filtered_df.empty:
             scores_melted = filtered_df.melt(id_vars=['Record_ID', 'Date'], var_name='Tên bệnh', value_name='Điểm nguy hiểm')
-
             rule = alt.Chart(pd.DataFrame({'y': [5]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y')
-
             line_chart = alt.Chart(scores_melted).mark_line().encode(
                 x=alt.X('Record_ID', title='Dòng dữ liệu (theo thời gian)'),
                 y=alt.Y('Điểm nguy hiểm', scale=alt.Scale(domain=[0, 10])),
                 color='Tên bệnh',
                 tooltip=['Date', 'Tên bệnh', 'Điểm nguy hiểm']
             ).interactive()
-
-            final_chart = (line_chart + rule).properties(
-                title='Diễn biến điểm nguy hiểm của các loại bệnh theo từng cập nhật'
-            )
-
+            final_chart = (line_chart + rule).properties(title='Diễn biến điểm nguy hiểm của các loại bệnh theo từng cập nhật')
             st.altair_chart(final_chart, use_container_width=True)
         else:
             st.warning("Không có dữ liệu để hiển thị trong khoảng ngày đã chọn.")
@@ -204,7 +242,22 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
+# --- XỬ LÝ NHẬP LIỆU (Không thay đổi) ---
+col1, col2 = st.columns([8, 2]) 
+with col1:
+    user_input = st.chat_input("Bác cần con giúp gì ạ?")
+with col2:
+    st.write("Hoặc hỏi bằng giọng nói:")
+    audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Dừng ghi âm", key='recorder')
+
+if audio_data:
+    audio_bytes = audio_data['bytes']
+    transcribed_text = transcribe_audio(audio_bytes)
+    if transcribed_text:
+        user_input = transcribed_text
+
+# --- CẬP NHẬT: XỬ LÝ PHẢN HỒI CỦA AI VÀ PHÁT ÂM THANH ---
+if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
@@ -212,13 +265,17 @@ if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
     with st.chat_message("assistant"):
         with st.spinner("Con đang nghĩ câu trả lời..."):
             history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-            # --- CẢI TIẾN: Cung cấp dữ liệu đã phân tích cho AI ---
             response = call_gemini_api(data_for_chatbot, user_input, history)
             st.markdown(response)
 
+            # --- THÊM MỚI: Chuyển câu trả lời thành giọng nói và phát ---
+            audio_response = text_to_speech(response)
+            if audio_response:
+                autoplay_audio(audio_response) # Tự động phát
+
     st.session_state.messages.append({"role": "assistant", "content": response})
 
-# --- Các nút điều khiển trong Sidebar ---
+# --- Sidebar (Không thay đổi) ---
 with st.sidebar:
     st.header("Cấu hình")
     st.text_input("Google Sheets Key", value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60", disabled=True)
@@ -228,6 +285,3 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
         st.rerun()
-
-
-
