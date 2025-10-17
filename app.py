@@ -27,6 +27,7 @@ def load_data_from_sheets(sheet_key):
         if not all(col in df.columns for col in required_columns):
             st.error(f"Lỗi: File Sheets phải chứa các cột: {', '.join(required_columns)}")
             return None
+        # --- CẬP NHẬT: Chuyển đổi sang đối tượng date, không phải datetime ---
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
         df.dropna(subset=['Date'], inplace=True)
         st.success(f"Đã tải và xử lý {len(df)} dòng dữ liệu từ Sheets.")
@@ -90,7 +91,6 @@ def calculate_disease_scores(df):
 
 # --- Hàm gọi API Gemini (Không đổi) ---
 def call_gemini_api(summary_report, user_prompt, history=""):
-    # (Giữ nguyên code hàm call_gemini_api của bạn)
     system_prompt = f"""
 Bạn là CHTN, một trợ lý AI nông nghiệp thân thiện và thông minh. Dựa vào báo cáo và lịch sử chat, hãy trả lời người dùng theo các quy tắc sau:
 - Nếu người dùng chào hỏi, hãy chào lại thân thiện.
@@ -113,17 +113,17 @@ Câu hỏi của người dùng: "{user_prompt}"
         return result['candidates'][0]['content']['parts'][0]['text'].strip()
     except Exception as e:
         return f"Lỗi gọi API: {e}"
-# (Hàm analyze_data_summary không còn cần thiết cho biểu đồ nữa, nhưng chatbot vẫn dùng)
+
 @st.cache_data
 def analyze_data_summary(df):
     if df is None or df.empty: return "Không có dữ liệu để phân tích."
-    # ... (giữ nguyên logic của hàm này)
     disease_counts = df['Tình trạng lúa'].value_counts().to_string()
     severity_counts = df['mức độ nhiễm'].value_counts().to_string()
     start_date = pd.to_datetime(df['Date'], errors='coerce').min().strftime('%Y-%m-%d')
     end_date = pd.to_datetime(df['Date'], errors='coerce').max().strftime('%Y-%m-%d')
     summary_text = f"Dữ liệu từ {start_date} đến {end_date}.\nBệnh:\n{disease_counts}\nMức độ:\n{severity_counts}"
     return summary_text
+    
 # --- Giao diện ứng dụng Streamlit ---
 st.title("🚨 Hệ thống Cảnh báo & Chatbot Nông nghiệp CHTN")
 
@@ -136,26 +136,54 @@ data_summary_for_chatbot = analyze_data_summary(df_data)
 if scores_df is not None and not scores_df.empty:
     with st.expander("📈 Xem biểu đồ điểm nguy hiểm của bệnh", expanded=True):
         
-        # Chuyển đổi dữ liệu từ dạng rộng sang dạng dài để Altair xử lý
-        scores_melted = scores_df.melt('Date', var_name='Tên bệnh', value_name='Điểm nguy hiểm')
+        # --- MỚI: Giới hạn (cap) giá trị điểm không vượt quá 10 ---
+        # Lấy danh sách các cột bệnh (tất cả các cột trừ cột 'Date')
+        disease_cols = [col for col in scores_df.columns if col != 'Date']
+        # Áp dụng giới hạn: bất kỳ giá trị nào > 10 sẽ được đặt thành 10
+        scores_df[disease_cols] = scores_df[disease_cols].clip(upper=10)
+        # -----------------------------------------------------------
 
-        # Đường giới hạn cảnh báo màu đỏ
-        rule = alt.Chart(pd.DataFrame({'y': [5]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y')
-
-        # Biểu đồ đường
-        line_chart = alt.Chart(scores_melted).mark_line().encode(
-            x=alt.X('Date', title='Ngày'),
-            y=alt.Y('Điểm nguy hiểm', scale=alt.Scale(domain=[0, 10])), # Giới hạn trục Y từ 0 đến 10
-            color='Tên bệnh',
-            tooltip=['Date', 'Tên bệnh', 'Điểm nguy hiểm']
-        ).interactive()
-
-        # Kết hợp biểu đồ và đường giới hạn
-        final_chart = (line_chart + rule).properties(
-            title='Diễn biến điểm nguy hiểm của các loại bệnh theo thời gian'
+        # --- MỚI: Thêm thanh trượt để chọn khoảng ngày ---
+        min_date = scores_df['Date'].min()
+        max_date = scores_df['Date'].max()
+        
+        start_date, end_date = st.slider(
+            "Chọn khoảng ngày bạn muốn xem:",
+            min_value=min_date,
+            max_value=max_date,
+            value=(min_date, max_date), # Giá trị mặc định là toàn bộ khoảng thời gian
+            format="DD/MM/YYYY" # Định dạng ngày tháng cho dễ nhìn
         )
 
-        st.altair_chart(final_chart, use_container_width=True)
+        # Lọc DataFrame dựa trên lựa chọn từ thanh trượt
+        filtered_df = scores_df[(scores_df['Date'] >= start_date) & (scores_df['Date'] <= end_date)]
+        # ----------------------------------------------------
+
+        if not filtered_df.empty:
+            # Chuyển đổi dữ liệu đã lọc từ dạng rộng sang dạng dài để Altair xử lý
+            scores_melted = filtered_df.melt('Date', var_name='Tên bệnh', value_name='Điểm nguy hiểm')
+
+            # Đường giới hạn cảnh báo màu đỏ
+            rule = alt.Chart(pd.DataFrame({'y': [5]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y')
+
+            # Biểu đồ đường
+            line_chart = alt.Chart(scores_melted).mark_line().encode(
+                x=alt.X('Date', title='Ngày'),
+                y=alt.Y('Điểm nguy hiểm', scale=alt.Scale(domain=[0, 10])), # Giữ nguyên giới hạn trục Y từ 0 đến 10
+                color='Tên bệnh',
+                tooltip=['Date', 'Tên bệnh', 'Điểm nguy hiểm']
+            ).interactive()
+
+            # Kết hợp biểu đồ và đường giới hạn
+            final_chart = (line_chart + rule).properties(
+                title='Diễn biến điểm nguy hiểm của các loại bệnh theo thời gian'
+            )
+
+            st.altair_chart(final_chart, use_container_width=True)
+        else:
+            # Thông báo nếu không có dữ liệu trong khoảng ngày đã chọn
+            st.warning("Không có dữ liệu để hiển thị trong khoảng ngày đã chọn.")
+
 
 # --- Giao diện Chatbot ---
 if "messages" not in st.session_state:
@@ -193,7 +221,3 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
         st.rerun()
-
-
-
-
