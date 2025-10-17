@@ -35,41 +35,47 @@ def load_data_from_sheets(sheet_key):
         st.error(f"Lỗi tải dữ liệu từ Sheets: {e}")
         return None
 
-# --- CẬP NHẬT LOGIC: TÍNH ĐIỂM THEO TỪNG HÀNG DỮ LIỆU ---
+# --- LOGIC TÍNH ĐIỂM ---
 @st.cache_data
 def calculate_disease_scores(df):
     if df is None or df.empty:
         return pd.DataFrame(), []
 
-    # Lọc bỏ các trạng thái không phải là bệnh để theo dõi
+    # Lọc ra danh sách các bệnh cần theo dõi
     disease_names = [d for d in df['Tình trạng lúa'].unique() if d not in ['healthy', 'Khỏe mạnh', 'Không xác định']]
     
-    # Khởi tạo điểm số
+    # Khởi tạo điểm số ban đầu cho các bệnh
     scores = {name: 0 for name in disease_names}
     scores_over_time = []
     
-    # Duyệt qua từng hàng trong DataFrame đã được sắp xếp theo ngày
+    # Duyệt qua từng hàng dữ liệu theo thứ tự thời gian
     for index, row in df.iterrows():
         date = row['Date']
         tinh_trang = row['Tình trạng lúa']
         muc_do = row['mức độ nhiễm']
         
-        # --- SỬA LỖI LOGIC ---
-        # Giảm điểm cho TẤT CẢ các bệnh nếu có báo cáo là lúa khỏe mạnh hoặc không nhiễm bệnh.
+        # --- ĐÂY LÀ LOGIC CỐT LÕI ---
+        # 1. Nếu báo cáo là "lúa khỏe mạnh" hoặc "không nhiễm bệnh"...
         if tinh_trang in ['healthy', 'Khỏe mạnh'] or muc_do == 'không nhiễm bệnh':
+            # ...thì giảm điểm của TẤT CẢ các bệnh đang theo dõi.
             for disease in scores:
                 scores[disease] = max(0, scores[disease] - 1)
         
-        # Tăng điểm chỉ khi báo cáo ghi nhận một bệnh cụ thể.
+        # 2. Ngược lại, nếu báo cáo về một bệnh cụ thể...
         elif tinh_trang in disease_names:
+            # ...thì chỉ tăng điểm cho bệnh đó.
             if muc_do == 'Mới nhiễm':
                 scores[tinh_trang] += 3
             elif muc_do == 'Nhiễm vừa':
                 scores[tinh_trang] += 4
             elif muc_do == 'Nhiễm nặng':
                 scores[tinh_trang] += 9
+            if scores[tinh_trang] > 10 :
+                scores[tinh_trang] = 10
+            if scores[tinh_trang] <0:
+                scores[tinh_trang] = 0
         
-        # Ghi lại điểm số tại thời điểm của hàng dữ liệu này
+        # Ghi lại trạng thái điểm số của tất cả các bệnh sau khi xử lý hàng này
         current_scores = {'Record_ID': index, 'Date': date, **scores}
         scores_over_time.append(current_scores)
 
@@ -121,16 +127,16 @@ def analyze_data_summary(df):
     return summary_text
     
 # --- Giao diện ứng dụng Streamlit ---
-st.title("🚨 Hệ thống Cảnh báo & Chatbot Nông nghiệp CHTN")
+st.title("WED HỆ THỐNG GIÁM SÁT & CHUẨN ĐOÁN BỆNH Ở LÚA CHTN")
 
-# --- LUỒNG XỬ LÝ CHÍNH ---
+                                   # --- LUỒNG XỬ LÝ CHÍNH ---
 df_data = load_data_from_sheets("1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
 scores_df, warnings = calculate_disease_scores(df_data)
 data_summary_for_chatbot = analyze_data_summary(df_data)
 
 # --- HIỂN THỊ BIỂU ĐỒ NGUY HIỂM ---
 if scores_df is not None and not scores_df.empty:
-    with st.expander("📈 Xem biểu đồ điểm nguy hiểm của bệnh", expanded=True):
+    with st.expander("Xem biểu đồ điểm nguy hiểm của bệnh", expanded=True):
         
         disease_cols = [col for col in scores_df.columns if col not in ['Date', 'Record_ID']]
         scores_df[disease_cols] = scores_df[disease_cols].clip(upper=10)
