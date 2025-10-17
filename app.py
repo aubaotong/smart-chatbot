@@ -15,7 +15,7 @@ except (FileNotFoundError, KeyError):
     st.error("Lỗi: Không tìm thấy GEMINI_API_KEY. Vui lòng thêm vào mục Secrets.")
     st.stop()
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent"
 
 # --- Tải và chuẩn bị dữ liệu ---
 @st.cache_data(ttl=300)
@@ -267,3 +267,4 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
         st.rerun()
+
