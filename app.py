@@ -41,47 +41,36 @@ def calculate_disease_scores(df):
     if df is None or df.empty:
         return pd.DataFrame(), []
 
-    # Lọc ra danh sách các bệnh cần theo dõi
     disease_names = [d for d in df['Tình trạng lúa'].unique() if d not in ['healthy', 'Khỏe mạnh', 'Không xác định']]
-    
-    # Khởi tạo điểm số ban đầu cho các bệnh
     scores = {name: 0 for name in disease_names}
     scores_over_time = []
     
-    # Duyệt qua từng hàng dữ liệu theo thứ tự thời gian
     for index, row in df.iterrows():
         date = row['Date']
         tinh_trang = row['Tình trạng lúa']
         muc_do = row['mức độ nhiễm']
         
-        # --- ĐÂY LÀ LOGIC CỐT LÕI ---
-        # 1. Nếu báo cáo là "lúa khỏe mạnh" hoặc "không nhiễm bệnh"...
         if tinh_trang in ['healthy', 'Khỏe mạnh'] or muc_do == 'không nhiễm bệnh':
-            # ...thì giảm điểm của TẤT CẢ các bệnh đang theo dõi.
             for disease in scores:
                 scores[disease] = max(0, scores[disease] - 1)
-        
-        # 2. Ngược lại, nếu báo cáo về một bệnh cụ thể...
         elif tinh_trang in disease_names:
-            # ...thì chỉ tăng điểm cho bệnh đó.
             if muc_do == 'Mới nhiễm':
                 scores[tinh_trang] += 3
             elif muc_do == 'Nhiễm vừa':
                 scores[tinh_trang] += 4
             elif muc_do == 'Nhiễm nặng':
                 scores[tinh_trang] += 9
-            if scores[tinh_trang] > 10 :
-                scores[tinh_trang] = 10
-            if scores[tinh_trang] <0:
-                scores[tinh_trang] = 0
         
-        # Ghi lại trạng thái điểm số của tất cả các bệnh sau khi xử lý hàng này
+        # --- CẬP NHẬT: Giới hạn điểm ngay trong vòng lặp ---
+        for disease in scores:
+             if scores[disease] > 10: scores[disease] = 10
+             if scores[disease] < 0: scores[disease] = 0
+
         current_scores = {'Record_ID': index, 'Date': date, **scores}
         scores_over_time.append(current_scores)
 
     scores_df = pd.DataFrame(scores_over_time)
     
-    # Kiểm tra cảnh báo dựa trên điểm số cuối cùng
     warnings = []
     if not scores_df.empty:
         last_scores = scores_df.iloc[-1]
@@ -91,16 +80,59 @@ def calculate_disease_scores(df):
 
     return scores_df, warnings
 
-# --- Hàm gọi API Gemini (Không đổi) ---
+# --- CẢI TIẾN: Hàm phân tích dữ liệu biểu đồ cho AI ---
+def analyze_scores_for_chatbot(scores_df):
+    if scores_df is None or scores_df.empty:
+        return "Hiện không có dữ liệu điểm nguy hiểm để phân tích."
+
+    # Lấy dữ liệu mới nhất
+    latest_scores = scores_df.iloc[-1]
+    latest_date = latest_scores['Date'].strftime('%d-%m-%Y')
+    disease_cols = [col for col in scores_df.columns if col not in ['Date', 'Record_ID']]
+    
+    # Xây dựng báo cáo
+    summary_text = f"Báo cáo phân tích diễn biến điểm nguy hiểm (tính đến ngày {latest_date}):\n\n"
+    summary_text += "**1. Điểm số hiện tại:**\n"
+    for disease in disease_cols:
+        score = latest_scores[disease]
+        summary_text += f"- {disease}: {score} điểm.\n"
+
+    # Phân tích xu hướng (dựa trên 5 điểm dữ liệu cuối)
+    summary_text += "\n**2. Phân tích xu hướng gần đây:**\n"
+    if len(scores_df) > 1:
+        for disease in disease_cols:
+            # Lấy 5 giá trị cuối, nếu không đủ thì lấy hết
+            recent_scores = scores_df[disease].tail(5)
+            if len(recent_scores) > 2:
+                trend_start = recent_scores.iloc[0]
+                trend_end = recent_scores.iloc[-1]
+                if trend_end > trend_start:
+                    trend = "có xu hướng **TĂNG**."
+                elif trend_end < trend_start:
+                    trend = "có xu hướng **GIẢM**."
+                else:
+                    trend = "đang **ỔN ĐỊNH**."
+            else:
+                trend = "chưa đủ dữ liệu để phân tích xu hướng."
+            summary_text += f"- {disease}: {trend}\n"
+    else:
+        summary_text += "- Chưa đủ dữ liệu để phân tích xu hướng.\n"
+
+    return summary_text
+
+# --- CẢI TIẾN: Cập nhật prompt để AI "đọc" biểu đồ ---
 def call_gemini_api(summary_report, user_prompt, history=""):
     system_prompt = f"""
-Bạn là CHTN, một trợ lý AI nông nghiệp thân thiện và thông minh. Dựa vào báo cáo và lịch sử chat, hãy trả lời người dùng theo các quy tắc sau:
-- Nếu người dùng chào hỏi, hãy chào lại thân thiện.
-- Nếu người dùng hỏi chung về tình hình, hãy tóm tắt báo cáo và phân tích tình hình của cách đông đang gặp phải đang mắc bệnh j mức độ nặng nhẹ như thế nào.
-- Nếu người dùng hỏi cụ thể, hãy tìm thông tin trong báo cáo để trả lời như cụ thể ngày nào hoặc ngày hôm nay lúa có bệnh không thì lấy trong dữ liệu ngày hôm nay.
-- Nếu người dùng trò chuyện, hãy trả lời tự nhiên theo vai trò.
+Bạn là CHTN, một trợ lý AI nông nghiệp chuyên phân tích biểu đồ và dữ liệu diễn biến. Dựa vào "Báo cáo phân tích diễn biến điểm nguy hiểm" dưới đây, hãy trả lời người dùng như một chuyên gia.
+
+QUY TẮC:
+- Khi được hỏi về tình hình chung, hãy tóm tắt báo cáo, tập trung vào các bệnh có điểm số cao và xu hướng TĂNG. Đưa ra nhận định tổng quan.
+- Khi được hỏi cụ thể về một bệnh, hãy dựa vào điểm số và xu hướng của bệnh đó để trả lời chi tiết.
+- Chủ động đưa ra lời khuyên dựa trên phân tích. Ví dụ: "Điểm bệnh đạo ôn đang có xu hướng tăng nhanh, bác nên ưu tiên thăm đồng và kiểm tra các dấu hiệu của bệnh này."
+- Nếu người dùng chào hỏi, hãy chào lại thân thiện và tóm tắt ngắn gọn tình hình nổi bật nhất (ví dụ: bệnh nào đang có điểm cao nhất).
+- Luôn trả lời dựa trên báo cáo được cung cấp.
 ---
-**BÁO CÁO TỔNG QUAN (Chỉ sử dụng khi cần thiết)**
+**BÁO CÁO PHÂN TÍCH DIỄN BIẾN ĐIỂM NGUY HIỂM (Dữ liệu chính để phân tích)**
 {summary_report}
 ---
 Lịch sử hội thoại gần đây: {history}
@@ -116,31 +148,18 @@ Câu hỏi của người dùng: "{user_prompt}"
     except Exception as e:
         return f"Lỗi gọi API: {e}"
 
-@st.cache_data
-def analyze_data_summary(df):
-    if df is None or df.empty: return "Không có dữ liệu để phân tích."
-    disease_counts = df['Tình trạng lúa'].value_counts().to_string()
-    severity_counts = df['mức độ nhiễm'].value_counts().to_string()
-    start_date = pd.to_datetime(df['Date'], errors='coerce').min().strftime('%Y-%m-%d')
-    end_date = pd.to_datetime(df['Date'], errors='coerce').max().strftime('%Y-%m-%d')
-    summary_text = f"Dữ liệu từ {start_date} đến {end_date}.\nBệnh:\n{disease_counts}\nMức độ:\n{severity_counts}"
-    return summary_text
-    
 # --- Giao diện ứng dụng Streamlit ---
 st.title("WED HỆ THỐNG GIÁM SÁT & CHUẨN ĐOÁN BỆNH Ở LÚA CHTN")
 
-                                   # --- LUỒNG XỬ LÝ CHÍNH ---
+# --- LUỒNG XỬ LÝ CHÍNH ---
 df_data = load_data_from_sheets("1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
 scores_df, warnings = calculate_disease_scores(df_data)
-data_summary_for_chatbot = analyze_data_summary(df_data)
+# --- CẢI TIẾN: Sử dụng hàm phân tích mới cho chatbot ---
+data_for_chatbot = analyze_scores_for_chatbot(scores_df)
 
 # --- HIỂN THỊ BIỂU ĐỒ NGUY HIỂM ---
 if scores_df is not None and not scores_df.empty:
     with st.expander("Xem biểu đồ điểm nguy hiểm của bệnh", expanded=True):
-        
-        disease_cols = [col for col in scores_df.columns if col not in ['Date', 'Record_ID']]
-        scores_df[disease_cols] = scores_df[disease_cols].clip(upper=10)
-
         min_date = scores_df['Date'].min()
         max_date = scores_df['Date'].max()
         
@@ -181,7 +200,6 @@ if "messages" not in st.session_state:
         warning_text = "⚠️ **CẢNH BÁO KHẨN!**\n\n" + "\n".join(f"- {w}" for w in warnings)
         st.session_state.messages.append({"role": "assistant", "content": warning_text})
 
-
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -194,7 +212,8 @@ if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
     with st.chat_message("assistant"):
         with st.spinner("Con đang nghĩ câu trả lời..."):
             history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-            response = call_gemini_api(data_summary_for_chatbot, user_input, history)
+            # --- CẢI TIẾN: Cung cấp dữ liệu đã phân tích cho AI ---
+            response = call_gemini_api(data_for_chatbot, user_input, history)
             st.markdown(response)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
