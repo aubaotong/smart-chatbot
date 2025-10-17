@@ -1,4 +1,8 @@
-# smart-chatbot
 streamlit
 requests
-gomgle-genertiveai
+pandas
+altair
+google-generativeai
+streamlit-mic-recorder
+SpeechRecognition
+pydub
