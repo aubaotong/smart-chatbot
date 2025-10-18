@@ -3,6 +3,6 @@ requests
 pandas
 altair
 google-generativeai
-streamlit-mic-recorder
+streamlit-mic-recorder SpeechRecognition pydub
 SpeechRecognition
 pydub
