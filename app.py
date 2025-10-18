@@ -79,7 +79,7 @@ def calculate_disease_scores(df):
 
 # --- HÀM PHÂN TÍCH & GỌI API (Không thay đổi) ---
 def analyze_scores_for_chatbot(scores_df):
-    if scores_df is None or scores_df.empty:
+    if scores_df is None or df.empty:
         return "Hiện không có dữ liệu điểm nguy hiểm để phân tích."
     latest_scores = scores_df.iloc[-1]
     latest_date = latest_scores['Date'].strftime('%d-%m-%Y')
@@ -197,14 +197,64 @@ audio_data = mic_recorder(
 )
 
 if audio_data:
+    # Bắt đầu khối try để xử lý lỗi một cách an toàn
     try:
         audio_bytes = BytesIO(audio_data['bytes'])
-        
-        # <<< THAY ĐỔI DUY NHẤT NẰM Ở ĐÂY >>>
-        # Xóa `format="wav"` để pydub tự nhận diện định dạng audio từ trình duyệt
         audio_segment = AudioSegment.from_file(audio_bytes)
         
         r = sr.Recognizer()
         
         with BytesIO() as wav_file:
             audio_segment.export(wav_file, format="wav")
+            wav_file.seek(0)
+            with sr.AudioFile(wav_file) as source:
+                audio = r.record(source)
+
+        transcribed_text = r.recognize_google(audio, language="vi-VN")
+        st.write(f"**Bác vừa nói:** *{transcribed_text}*")
+
+        st.session_state.messages.append({"role": "user", "content": transcribed_text})
+        with st.chat_message("user"):
+            st.markdown(transcribed_text)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Con đang nghĩ câu trả lời..."):
+                history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
+                response = call_gemini_api(data_for_chatbot, transcribed_text, history)
+                st.markdown(response)
+        
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.rerun()
+
+    # Kết thúc khối try bằng các khối except để bắt lỗi
+    except sr.UnknownValueError:
+        st.error("Con không nghe rõ bác nói gì cả. Bác thử lại nhé!")
+    except sr.RequestError as e:
+        st.error(f"Lỗi kết nối đến dịch vụ nhận dạng giọng nói; {e}")
+    except Exception as e:
+        st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
+
+# --- Xử lý input bằng văn bản ---
+if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Con đang nghĩ câu trả lời..."):
+            history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
+            response = call_gemini_api(data_for_chatbot, user_input, history)
+            st.markdown(response)
+
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# --- Các nút điều khiển trong Sidebar ---
+with st.sidebar:
+    st.header("Cấu hình")
+    st.text_input("Google Sheets Key", value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60", disabled=True)
+    if st.button("Tải lại & Phân tích dữ liệu"):
+        st.cache_data.clear()
+        st.rerun()
+    if st.button("Xóa lịch sử chat"):
+        st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
+        st.rerun()
