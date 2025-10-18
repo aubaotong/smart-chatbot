@@ -4,7 +4,7 @@ import pandas as pd
 from io import StringIO, BytesIO
 import urllib.request
 import altair as alt
-import re # Thêm thư viện xử lý biểu thức chính quy
+import re
 
 # Thư viện cho tính năng giọng nói
 from streamlit_mic_recorder import mic_recorder
@@ -21,36 +21,22 @@ except (FileNotFoundError, KeyError):
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
 
-# --- HÀM MỚI: Dọn dẹp văn bản để đọc tự nhiên hơn ---
+# --- Hàm dọn dẹp văn bản ---
 def clean_text_for_speech(text: str) -> str:
-    """
-    Loại bỏ các ký tự Markdown và các ký tự không cần thiết khác khỏi văn bản
-    để giúp gTTS đọc tự nhiên hơn.
-    """
-    # Loại bỏ các dấu sao dùng để in đậm/nghiêng
     text = re.sub(r'\*\*', '', text)
     text = re.sub(r'\*', '', text)
-    # Loại bỏ các dấu gạch đầu dòng và khoảng trắng thừa
     text = re.sub(r'^\s*-\s*', '', text, flags=re.MULTILINE)
-    # Thay thế các dấu hai chấm bằng dấu phẩy để có điểm dừng nhẹ
     text = text.replace(':', ',')
     return text
 
-# --- HÀM CẬP NHẬT: Chuyển văn bản thành audio player ---
+# --- Hàm chuyển văn bản thành audio ---
 def text_to_speech(text: str, language: str = 'vi'):
-    """
-    Chuyển đổi văn bản thành giọng nói và hiển thị một trình phát audio st.audio().
-    """
     try:
-        # Sử dụng văn bản đã được dọn dẹp để tạo âm thanh
         cleaned_text = clean_text_for_speech(text)
-        
         tts = gTTS(text=cleaned_text, lang=language, slow=False)
         fp = BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
-        
-        # Trả về dữ liệu audio để lưu và phát
         return fp
     except Exception as e:
         st.error(f"Lỗi khi tạo âm thanh: {e}")
@@ -149,11 +135,9 @@ def call_gemini_api(summary_report, user_prompt, history=""):
     system_prompt = f"""
 Bạn là CHTN, một trợ lý AI nông nghiệp chuyên phân tích biểu đồ và dữ liệu diễn biến. Dựa vào "Báo cáo phân tích diễn biến điểm nguy hiểm" dưới đây, hãy trả lời người dùng như một chuyên gia.
 QUY TẮC:
+- Trả lời ngắn gọn, tập trung vào thông tin quan trọng nhất.
 - Khi được hỏi về tình hình chung, hãy tóm tắt báo cáo, tập trung vào các bệnh có điểm số cao và xu hướng TĂNG. Đưa ra nhận định tổng quan.
 - Khi được hỏi cụ thể về một bệnh, hãy dựa vào điểm số và xu hướng của bệnh đó để trả lời chi tiết.
-- Bệnh lớn hơn mức 0 thì tính là vẫn còn bệnh cần điều trị 
-- Bệnh lớn hơn mức 6 thì tính là bệnh nặng cần điều trị gắp vì bệnh đã rất nặng
-- Bệnh không thể khỏi trong một ngày được nên cần xuyên nghĩ kĩ trước khi đưa lời khuyên
 - Chủ động đưa ra lời khuyên dựa trên phân tích. Ví dụ: "Điểm bệnh đạo ôn đang có xu hướng tăng nhanh, bác nên ưu tiên thăm đồng và kiểm tra các dấu hiệu của bệnh này."
 - Nếu người dùng chào hỏi, hãy chào lại thân thiện và tóm tắt ngắn gọn tình hình nổi bật nhất (ví dụ: bệnh nào đang có điểm cao nhất).
 - Luôn trả lời dựa trên báo cáo được cung cấp.
@@ -214,8 +198,6 @@ if scores_df is not None and not scores_df.empty:
 # --- Giao diện Chatbot ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    st.session_state.voice_mode = False
-    
     initial_msg = "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."
     st.session_state.messages.append({"role": "assistant", "content": initial_msg})
     if warnings:
@@ -229,13 +211,17 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio" in message:
             st.audio(message["audio"], format='audio/mp3', start_time=0)
 
-# --- Chế độ đàm thoại ---
+# --- THAY ĐỔI: Giao diện trò chuyện đơn giản hơn ---
 st.write("---")
-st.session_state.voice_mode = st.toggle("Bật/Tắt chế độ đàm thoại", value=st.session_state.voice_mode)
+st.write("**Trò chuyện bằng giọng nói:**")
 
-if st.session_state.voice_mode:
-    audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
-    if audio_data:
+audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
+
+if audio_data:
+    # --- THAY ĐỔI: Thêm kiểm tra chống lặp ---
+    # Chỉ xử lý nếu audio mới được ghi lại (dựa vào ID duy nhất)
+    if st.session_state.get('last_audio_id') != audio_data['id']:
+        st.session_state.last_audio_id = audio_data['id'] # Lưu ID của audio vừa xử lý
         try:
             audio_bytes = BytesIO(audio_data['bytes'])
             audio_segment = AudioSegment.from_file(audio_bytes)
@@ -252,14 +238,11 @@ if st.session_state.voice_mode:
             history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
             response = call_gemini_api(data_for_chatbot, transcribed_text, history)
 
-            # Tạo audio từ văn bản trả lời của AI
             audio_file = text_to_speech(response)
             
             if audio_file:
-                # Lưu cả nội dung text và audio vào tin nhắn
                 st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_file})
             else:
-                # Nếu tạo audio lỗi, chỉ lưu text
                 st.session_state.messages.append({"role": "assistant", "content": response})
 
             st.rerun()
@@ -269,19 +252,18 @@ if st.session_state.voice_mode:
         except Exception as e:
             st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
 
-# --- Xử lý input bằng văn bản ---
-if not st.session_state.voice_mode:
-    if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
+# Ô nhập văn bản luôn hiển thị
+if user_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(user_input)
 
-        with st.chat_message("assistant"):
-            with st.spinner("Con đang nghĩ câu trả lời..."):
-                history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-                response = call_gemini_api(data_for_chatbot, user_input, history)
-                st.markdown(response)
-                st.session_state.messages.append({"role": "assistant", "content": response})
+    with st.chat_message("assistant"):
+        with st.spinner("Con đang nghĩ câu trả lời..."):
+            history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
+            response = call_gemini_api(data_for_chatbot, user_input, history)
+            st.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
 
 # --- Các nút điều khiển trong Sidebar ---
 with st.sidebar:
@@ -292,5 +274,6 @@ with st.sidebar:
         st.rerun()
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = []
-        st.session_state.voice_mode = False
+        if 'last_audio_id' in st.session_state:
+            del st.session_state['last_audio_id']
         st.rerun()
