@@ -198,6 +198,8 @@ if scores_df is not None and not scores_df.empty:
 # --- Giao diện Chatbot ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    # <<< THAY ĐỔI: Khởi tạo cờ hiệu xử lý audio >>>
+    st.session_state.audio_processed = True
     initial_msg = "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."
     st.session_state.messages.append({"role": "assistant", "content": initial_msg})
     if warnings:
@@ -215,52 +217,52 @@ for message in st.session_state.messages:
 st.write("---")
 st.write("**Trò chuyện bằng giọng nói:**")
 
-# Kiểm tra xem trạng thái mic có tồn tại và khác None không
-if 'mic_recorder' in st.session_state and st.session_state.mic_recorder is not None:
-    audio_data = st.session_state.mic_recorder
-else:
-    audio_data = None
+audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
 
-# Gọi component, giá trị của nó sẽ được lưu vào st.session_state.mic_recorder
-mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
+# <<< THAY ĐỔI: Logic xử lý audio hoàn toàn mới >>>
+if audio_data and audio_data.get("bytes"):
+    # Khi có audio mới, đặt cờ hiệu là chưa xử lý
+    if 'last_audio_id' not in st.session_state or st.session_state.last_audio_id != audio_data['id']:
+        st.session_state.last_audio_id = audio_data['id']
+        st.session_state.audio_processed = False
 
-if audio_data:
+# Chỉ xử lý khi có audio và cờ hiệu báo chưa xử lý
+if 'last_audio_id' in st.session_state and not st.session_state.audio_processed:
     with st.spinner("Con đang xử lý giọng nói và suy nghĩ..."):
         try:
-            audio_bytes = BytesIO(audio_data['bytes'])
-            audio_segment = AudioSegment.from_file(audio_bytes)
-            r = sr.Recognizer()
-            with BytesIO() as wav_file:
-                audio_segment.export(wav_file, format="wav")
-                wav_file.seek(0)
-                with sr.AudioFile(wav_file) as source:
-                    audio = r.record(source)
-            transcribed_text = r.recognize_google(audio, language="vi-VN")
+            # Lấy audio data từ session_state để xử lý
+            current_audio_data = st.session_state.get('mic_recorder')
+            if current_audio_data:
+                audio_bytes = BytesIO(current_audio_data['bytes'])
+                audio_segment = AudioSegment.from_file(audio_bytes)
+                r = sr.Recognizer()
+                with BytesIO() as wav_file:
+                    audio_segment.export(wav_file, format="wav")
+                    wav_file.seek(0)
+                    with sr.AudioFile(wav_file) as source:
+                        audio = r.record(source)
+                transcribed_text = r.recognize_google(audio, language="vi-VN")
 
-            st.session_state.messages.append({"role": "user", "content": transcribed_text})
-            history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-            response = call_gemini_api(data_for_chatbot, transcribed_text, history)
-            audio_file = text_to_speech(response)
+                st.session_state.messages.append({"role": "user", "content": transcribed_text})
+                history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
+                response = call_gemini_api(data_for_chatbot, transcribed_text, history)
+                audio_file = text_to_speech(response)
 
-            if audio_file:
-                st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_file})
-            else:
-                st.session_state.messages.append({"role": "assistant", "content": response})
-
-            # <<< THAY ĐỔI: Reset trạng thái của nút ghi âm một cách "nhẹ nhàng" >>>
-            st.session_state.mic_recorder = None
+                if audio_file:
+                    st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_file})
+                else:
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                
+                # Đánh dấu là đã xử lý xong
+                st.session_state.audio_processed = True
+                st.rerun()
             
-            st.rerun()
-
         except sr.UnknownValueError:
             st.toast("Con không nghe rõ, bác thử lại nhé!", icon="🤔")
-            # Cũng reset lại trạng thái ở đây để người dùng thử lại
-            st.session_state.mic_recorder = None
-            st.rerun()
+            st.session_state.audio_processed = True # Reset cờ hiệu khi có lỗi
         except Exception as e:
             st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
-            st.session_state.mic_recorder = None
-
+            st.session_state.audio_processed = True # Reset cờ hiệu khi có lỗi
 
 # Ô nhập văn bản luôn hiển thị
 if user_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
@@ -282,7 +284,8 @@ with st.sidebar:
         st.rerun()
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = []
-        # Xóa cả trạng thái của nút ghi âm nếu có
-        if 'mic_recorder' in st.session_state:
-            st.session_state.mic_recorder = None
+        # Reset cả cờ hiệu audio
+        st.session_state.audio_processed = True
+        if 'last_audio_id' in st.session_state:
+            del st.session_state['last_audio_id']
         st.rerun()
