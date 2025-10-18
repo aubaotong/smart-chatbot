@@ -211,18 +211,17 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio" in message:
             st.audio(message["audio"], format='audio/mp3', start_time=0)
 
-# --- THAY ĐỔI: Giao diện trò chuyện đơn giản hơn ---
+# --- Giao diện trò chuyện ---
 st.write("---")
 st.write("**Trò chuyện bằng giọng nói:**")
 
 audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
 
 if audio_data:
-    # --- THAY ĐỔI: Thêm kiểm tra chống lặp ---
-    # Chỉ xử lý nếu audio mới được ghi lại (dựa vào ID duy nhất)
-    if st.session_state.get('last_audio_id') != audio_data['id']:
-        st.session_state.last_audio_id = audio_data['id'] # Lưu ID của audio vừa xử lý
+    # <<< THAY ĐỔI: Thêm spinner bao bọc toàn bộ quá trình xử lý >>>
+    with st.spinner("Con đang xử lý giọng nói và suy nghĩ..."):
         try:
+            # Xử lý audio thành văn bản
             audio_bytes = BytesIO(audio_data['bytes'])
             audio_segment = AudioSegment.from_file(audio_bytes)
             r = sr.Recognizer()
@@ -232,19 +231,24 @@ if audio_data:
                 with sr.AudioFile(wav_file) as source:
                     audio = r.record(source)
             transcribed_text = r.recognize_google(audio, language="vi-VN")
-            
+
+            # Thêm tin nhắn người dùng vào lịch sử và gọi API
             st.session_state.messages.append({"role": "user", "content": transcribed_text})
-            
             history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
             response = call_gemini_api(data_for_chatbot, transcribed_text, history)
-
             audio_file = text_to_speech(response)
-            
+
+            # Thêm tin nhắn của AI vào lịch sử
             if audio_file:
                 st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_file})
             else:
                 st.session_state.messages.append({"role": "assistant", "content": response})
 
+            # Reset trạng thái nút ghi âm
+            if 'mic_recorder' in st.session_state:
+                del st.session_state['mic_recorder']
+            
+            # Chạy lại để hiển thị kết quả
             st.rerun()
 
         except sr.UnknownValueError:
@@ -255,9 +259,7 @@ if audio_data:
 # Ô nhập văn bản luôn hiển thị
 if user_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
     st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
+    
     with st.chat_message("assistant"):
         with st.spinner("Con đang nghĩ câu trả lời..."):
             history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
@@ -274,6 +276,6 @@ with st.sidebar:
         st.rerun()
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = []
-        if 'last_audio_id' in st.session_state:
-            del st.session_state['last_audio_id']
+        if 'mic_recorder' in st.session_state:
+            del st.session_state['mic_recorder']
         st.rerun()
