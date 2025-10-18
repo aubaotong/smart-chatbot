@@ -218,46 +218,46 @@ st.write("**Trò chuyện bằng giọng nói:**")
 audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
 
 if audio_data:
-    if st.session_state.get('last_audio_id') != audio_data['id']:
-        st.session_state.last_audio_id = audio_data['id']
-        try:
-            audio_bytes = BytesIO(audio_data['bytes'])
-            audio_segment = AudioSegment.from_file(audio_bytes)
-            r = sr.Recognizer()
-            with BytesIO() as wav_file:
-                audio_segment.export(wav_file, format="wav")
-                wav_file.seek(0)
-                with sr.AudioFile(wav_file) as source:
-                    audio = r.record(source)
-            transcribed_text = r.recognize_google(audio, language="vi-VN")
-            
-            st.session_state.messages.append({"role": "user", "content": transcribed_text})
-            
-            # <<< THAY ĐỔI: Thêm spinner vào đây >>>
-            with st.spinner("Con đang nghĩ câu trả lời..."):
-                history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-                response = call_gemini_api(data_for_chatbot, transcribed_text, history)
-                audio_file = text_to_speech(response)
-            
-            if audio_file:
-                st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_file})
-            else:
-                st.session_state.messages.append({"role": "assistant", "content": response})
+    try:
+        audio_bytes = BytesIO(audio_data['bytes'])
+        audio_segment = AudioSegment.from_file(audio_bytes)
+        r = sr.Recognizer()
+        with BytesIO() as wav_file:
+            audio_segment.export(wav_file, format="wav")
+            wav_file.seek(0)
+            with sr.AudioFile(wav_file) as source:
+                audio = r.record(source)
+        transcribed_text = r.recognize_google(audio, language="vi-VN")
 
-            st.rerun()
+        st.session_state.messages.append({"role": "user", "content": transcribed_text})
 
-        except sr.UnknownValueError:
-            st.toast("Con không nghe rõ, bác thử lại nhé!", icon="🤔")
-        except Exception as e:
-            st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
+        with st.spinner("Con đang nghĩ câu trả lời..."):
+            history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
+            response = call_gemini_api(data_for_chatbot, transcribed_text, history)
+            audio_file = text_to_speech(response)
+
+        if audio_file:
+            st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_file})
+        else:
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
+        # <<< THAY ĐỔI: Reset trạng thái của nút ghi âm >>>
+        # Xóa trạng thái của widget khỏi session_state để nó sẵn sàng cho lần ghi âm tiếp theo.
+        # Đây là cách chính xác để xử lý input một lần trong Streamlit.
+        if 'mic_recorder' in st.session_state:
+            del st.session_state['mic_recorder']
+
+        st.rerun()
+
+    except sr.UnknownValueError:
+        st.toast("Con không nghe rõ, bác thử lại nhé!", icon="🤔")
+    except Exception as e:
+        st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
 
 # Ô nhập văn bản luôn hiển thị
 if user_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
     st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    # Phần này đã có spinner sẵn
+    
     with st.chat_message("assistant"):
         with st.spinner("Con đang nghĩ câu trả lời..."):
             history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
@@ -274,6 +274,7 @@ with st.sidebar:
         st.rerun()
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = []
-        if 'last_audio_id' in st.session_state:
-            del st.session_state['last_audio_id']
+        # Xóa cả trạng thái của nút ghi âm nếu có
+        if 'mic_recorder' in st.session_state:
+            del st.session_state['mic_recorder']
         st.rerun()
