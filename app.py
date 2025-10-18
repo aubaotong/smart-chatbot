@@ -77,9 +77,11 @@ def calculate_disease_scores(df):
                 warnings.append(f"Bệnh '{disease}' đã vượt ngưỡng cảnh báo với {score} điểm!")
     return scores_df, warnings
 
-# --- HÀM PHÂN TÍCH & GỌI API (Không thay đổi) ---
+# --- HÀM PHÂN TÍCH & GỌI API (ĐÃ SỬA LỖI) ---
 def analyze_scores_for_chatbot(scores_df):
-    if scores_df is None or df.empty:
+    # <<< THAY ĐỔI DUY NHẤT NẰM Ở ĐÂY >>>
+    # Sửa lại `df.empty` thành `scores_df.empty` cho đúng với tên biến của hàm
+    if scores_df is None or scores_df.empty:
         return "Hiện không có dữ liệu điểm nguy hiểm để phân tích."
     latest_scores = scores_df.iloc[-1]
     latest_date = latest_scores['Date'].strftime('%d-%m-%Y')
@@ -197,7 +199,6 @@ audio_data = mic_recorder(
 )
 
 if audio_data:
-    # Bắt đầu khối try để xử lý lỗi một cách an toàn
     try:
         audio_bytes = BytesIO(audio_data['bytes'])
         audio_segment = AudioSegment.from_file(audio_bytes)
@@ -226,7 +227,6 @@ if audio_data:
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.rerun()
 
-    # Kết thúc khối try bằng các khối except để bắt lỗi
     except sr.UnknownValueError:
         st.error("Con không nghe rõ bác nói gì cả. Bác thử lại nhé!")
     except sr.RequestError as e:
