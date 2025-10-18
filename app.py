@@ -125,6 +125,8 @@ QUY TẮC:
 - Khi được hỏi về tình hình chung, hãy tóm tắt báo cáo, tập trung vào các bệnh có điểm số cao và xu hướng TĂNG. Đưa ra nhận định tổng quan.
 - Khi được hỏi cụ thể về một bệnh, hãy dựa vào điểm số và xu hướng của bệnh đó để trả lời chi tiết.
 - Bệnh lớn hơn mức 0 thì tính là vẫn còn bệnh cần điều trị 
+- Bệnh lớn hơn mức 6 thì tính là bệnh nặng cần điều trị gắp vì bệnh đã rất nặng
+- Bệnh không thể khỏi trong một ngày được nên cần xuyên nghĩ kĩ trước khi đưa lời khuyên
 - Chủ động đưa ra lời khuyên dựa trên phân tích. Ví dụ: "Điểm bệnh đạo ôn đang có xu hướng tăng nhanh, bác nên ưu tiên thăm đồng và kiểm tra các dấu hiệu của bệnh này."
 - Nếu người dùng chào hỏi, hãy chào lại thân thiện và tóm tắt ngắn gọn tình hình nổi bật nhất (ví dụ: bệnh nào đang có điểm cao nhất).
 - Luôn trả lời dựa trên báo cáo được cung cấp.
@@ -229,3 +231,4 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
         st.rerun()
+
