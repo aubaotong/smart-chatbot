@@ -27,7 +27,7 @@ def load_data_from_sheets(sheet_key):
         if not all(col in df.columns for col in required_columns):
             st.error(f"Lỗi: File Sheets phải chứa các cột: {', '.join(required_columns)}")
             return None
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         df.dropna(subset=['Date'], inplace=True)
         st.success(f"Đã tải và xử lý {len(df)} dòng dữ liệu từ Sheets.")
         return df.sort_values(by='Date') # Sắp xếp dữ liệu theo ngày
@@ -228,3 +228,4 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
         st.rerun()
+
