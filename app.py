@@ -160,8 +160,8 @@ data_for_chatbot = analyze_scores_for_chatbot(scores_df)
 # --- HIỂN THỊ BIỂU ĐỒ NGUY HIỂM ---
 if scores_df is not None and not scores_df.empty:
     with st.expander("Xem biểu đồ điểm nguy hiểm của bệnh", expanded=True):
-        min_date = scores_df['Date'].min()
-        max_date = scores_df['Date'].max()
+        min_date = scores_df['Date'].min().date()
+        max_date = scores_df['Date'].max().date()
         
         start_date, end_date = st.slider(
             "Chọn khoảng ngày bạn muốn xem:",
@@ -228,4 +228,5 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
         st.rerun()
+
 
