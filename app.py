@@ -215,13 +215,18 @@ for message in st.session_state.messages:
 st.write("---")
 st.write("**Trò chuyện bằng giọng nói:**")
 
-audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
+# Kiểm tra xem trạng thái mic có tồn tại và khác None không
+if 'mic_recorder' in st.session_state and st.session_state.mic_recorder is not None:
+    audio_data = st.session_state.mic_recorder
+else:
+    audio_data = None
+
+# Gọi component, giá trị của nó sẽ được lưu vào st.session_state.mic_recorder
+mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
 
 if audio_data:
-    # <<< THAY ĐỔI: Thêm spinner bao bọc toàn bộ quá trình xử lý >>>
     with st.spinner("Con đang xử lý giọng nói và suy nghĩ..."):
         try:
-            # Xử lý audio thành văn bản
             audio_bytes = BytesIO(audio_data['bytes'])
             audio_segment = AudioSegment.from_file(audio_bytes)
             r = sr.Recognizer()
@@ -232,29 +237,30 @@ if audio_data:
                     audio = r.record(source)
             transcribed_text = r.recognize_google(audio, language="vi-VN")
 
-            # Thêm tin nhắn người dùng vào lịch sử và gọi API
             st.session_state.messages.append({"role": "user", "content": transcribed_text})
             history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
             response = call_gemini_api(data_for_chatbot, transcribed_text, history)
             audio_file = text_to_speech(response)
 
-            # Thêm tin nhắn của AI vào lịch sử
             if audio_file:
                 st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_file})
             else:
                 st.session_state.messages.append({"role": "assistant", "content": response})
 
-            # Reset trạng thái nút ghi âm
-            if 'mic_recorder' in st.session_state:
-                del st.session_state['mic_recorder']
+            # <<< THAY ĐỔI: Reset trạng thái của nút ghi âm một cách "nhẹ nhàng" >>>
+            st.session_state.mic_recorder = None
             
-            # Chạy lại để hiển thị kết quả
             st.rerun()
 
         except sr.UnknownValueError:
             st.toast("Con không nghe rõ, bác thử lại nhé!", icon="🤔")
+            # Cũng reset lại trạng thái ở đây để người dùng thử lại
+            st.session_state.mic_recorder = None
+            st.rerun()
         except Exception as e:
             st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
+            st.session_state.mic_recorder = None
+
 
 # Ô nhập văn bản luôn hiển thị
 if user_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
@@ -276,6 +282,7 @@ with st.sidebar:
         st.rerun()
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = []
+        # Xóa cả trạng thái của nút ghi âm nếu có
         if 'mic_recorder' in st.session_state:
-            del st.session_state['mic_recorder']
+            st.session_state.mic_recorder = None
         st.rerun()
