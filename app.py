@@ -186,7 +186,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- PHẦN MỚI: Xử lý input bằng giọng nói ---
+# --- Xử lý input bằng giọng nói ---
 st.write("---")
 st.write("**Hoặc trò chuyện bằng giọng nói:**")
 audio_data = mic_recorder(
@@ -197,68 +197,14 @@ audio_data = mic_recorder(
 )
 
 if audio_data:
-    # Chuyển đổi dữ liệu audio từ bytes sang định dạng mà thư viện speech_recognition có thể đọc
     try:
         audio_bytes = BytesIO(audio_data['bytes'])
-        audio_segment = AudioSegment.from_file(audio_bytes, format="wav")
         
-        # Khởi tạo recognizer
+        # <<< THAY ĐỔI DUY NHẤT NẰM Ở ĐÂY >>>
+        # Xóa `format="wav"` để pydub tự nhận diện định dạng audio từ trình duyệt
+        audio_segment = AudioSegment.from_file(audio_bytes)
+        
         r = sr.Recognizer()
         
-        # Ghi âm thanh vào một file ảo để recognizer xử lý
         with BytesIO() as wav_file:
             audio_segment.export(wav_file, format="wav")
-            wav_file.seek(0)
-            with sr.AudioFile(wav_file) as source:
-                audio = r.record(source)
-
-        # Nhận dạng giọng nói bằng Google Web Speech API (hỗ trợ tiếng Việt)
-        transcribed_text = r.recognize_google(audio, language="vi-VN")
-        st.write(f"**Bác vừa nói:** *{transcribed_text}*")
-
-        # Xử lý văn bản đã nhận dạng như một tin nhắn mới
-        st.session_state.messages.append({"role": "user", "content": transcribed_text})
-        with st.chat_message("user"):
-            st.markdown(transcribed_text)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Con đang nghĩ câu trả lời..."):
-                history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-                response = call_gemini_api(data_for_chatbot, transcribed_text, history)
-                st.markdown(response)
-        
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        st.rerun() # Chạy lại để cập nhật giao diện ngay lập tức
-
-    except sr.UnknownValueError:
-        st.error("Con không nghe rõ bác nói gì cả. Bác thử lại nhé!")
-    except sr.RequestError as e:
-        st.error(f"Lỗi kết nối đến dịch vụ nhận dạng giọng nói; {e}")
-    except Exception as e:
-        st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
-# -----------------------------------------------------------
-
-# --- Cập nhật xử lý input bằng văn bản ---
-if user_input := st.chat_input("Bác cần con giúp gì ạ?"):
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    with st.chat_message("assistant"):
-        with st.spinner("Con đang nghĩ câu trả lời..."):
-            history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-            response = call_gemini_api(data_for_chatbot, user_input, history)
-            st.markdown(response)
-
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
-# --- Các nút điều khiển trong Sidebar (Không thay đổi) ---
-with st.sidebar:
-    st.header("Cấu hình")
-    st.text_input("Google Sheets Key", value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60", disabled=True)
-    if st.button("Tải lại & Phân tích dữ liệu"):
-        st.cache_data.clear()
-        st.rerun()
-    if st.button("Xóa lịch sử chat"):
-        st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
-        st.rerun()
