@@ -6,3 +6,4 @@ google-generativeai
 streamlit-mic-recorder
 SpeechRecognition
 pydub
+gTTS
