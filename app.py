@@ -171,7 +171,7 @@ if scores_df is not None and not scores_df.empty:
             format="DD/MM/YYYY"
         )
 
-        filtered_df = scores_df[(scores_df['Date'] >= start_date) & (scores_df['Date'] <= end_date)]
+        filtered_df = scores_df[(scores_df['Date'].dt.date >= start_date) & (scores_df['Date'].dt.date <= end_date)]
 
         if not filtered_df.empty:
             scores_melted = filtered_df.melt(id_vars=['Record_ID', 'Date'], var_name='Tên bệnh', value_name='Điểm nguy hiểm')
@@ -228,5 +228,6 @@ with st.sidebar:
     if st.button("Xóa lịch sử chat"):
         st.session_state.messages = [{"role": "assistant", "content": "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."}]
         st.rerun()
+
 
 
