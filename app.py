@@ -4,6 +4,7 @@ import pandas as pd
 from io import StringIO, BytesIO
 import urllib.request
 import altair as alt
+import re # Thêm thư viện xử lý biểu thức chính quy
 
 # Thư viện cho tính năng giọng nói
 from streamlit_mic_recorder import mic_recorder
@@ -20,20 +21,40 @@ except (FileNotFoundError, KeyError):
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
 
-# --- HÀM ĐƯỢC CẬP NHẬT: Chuyển văn bản thành audio player có thể bấm được ---
+# --- HÀM MỚI: Dọn dẹp văn bản để đọc tự nhiên hơn ---
+def clean_text_for_speech(text: str) -> str:
+    """
+    Loại bỏ các ký tự Markdown và các ký tự không cần thiết khác khỏi văn bản
+    để giúp gTTS đọc tự nhiên hơn.
+    """
+    # Loại bỏ các dấu sao dùng để in đậm/nghiêng
+    text = re.sub(r'\*\*', '', text)
+    text = re.sub(r'\*', '', text)
+    # Loại bỏ các dấu gạch đầu dòng và khoảng trắng thừa
+    text = re.sub(r'^\s*-\s*', '', text, flags=re.MULTILINE)
+    # Thay thế các dấu hai chấm bằng dấu phẩy để có điểm dừng nhẹ
+    text = text.replace(':', ',')
+    return text
+
+# --- HÀM CẬP NHẬT: Chuyển văn bản thành audio player ---
 def text_to_speech(text: str, language: str = 'vi'):
     """
     Chuyển đổi văn bản thành giọng nói và hiển thị một trình phát audio st.audio().
     """
     try:
-        tts = gTTS(text=text, lang=language, slow=False)
+        # Sử dụng văn bản đã được dọn dẹp để tạo âm thanh
+        cleaned_text = clean_text_for_speech(text)
+        
+        tts = gTTS(text=cleaned_text, lang=language, slow=False)
         fp = BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
-        # Hiển thị trình phát audio
-        st.audio(fp, format='audio/mp3', start_time=0)
+        
+        # Trả về dữ liệu audio để lưu và phát
+        return fp
     except Exception as e:
         st.error(f"Lỗi khi tạo âm thanh: {e}")
+        return None
 
 # --- Tải và chuẩn bị dữ liệu (Không thay đổi) ---
 @st.cache_data(ttl=300)
@@ -195,7 +216,6 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.voice_mode = False
     
-    # Tin nhắn chào mừng ban đầu
     initial_msg = "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."
     st.session_state.messages.append({"role": "assistant", "content": initial_msg})
     if warnings:
@@ -206,7 +226,6 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        # Nếu tin nhắn là của assistant và có audio, hiển thị trình phát
         if message["role"] == "assistant" and "audio" in message:
             st.audio(message["audio"], format='audio/mp3', start_time=0)
 
@@ -218,7 +237,6 @@ if st.session_state.voice_mode:
     audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
     if audio_data:
         try:
-            # Xử lý audio đầu vào
             audio_bytes = BytesIO(audio_data['bytes'])
             audio_segment = AudioSegment.from_file(audio_bytes)
             r = sr.Recognizer()
@@ -229,23 +247,21 @@ if st.session_state.voice_mode:
                     audio = r.record(source)
             transcribed_text = r.recognize_google(audio, language="vi-VN")
             
-            # Thêm tin nhắn người dùng vào chat
             st.session_state.messages.append({"role": "user", "content": transcribed_text})
             
-            # Gọi API và lấy phản hồi
             history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
             response = call_gemini_api(data_for_chatbot, transcribed_text, history)
 
-            # --- CẬP NHẬT LOGIC LƯU TIN NHẮN ---
-            # Chuyển văn bản thành audio và lưu vào tin nhắn
-            tts = gTTS(text=response, lang='vi', slow=False)
-            fp = BytesIO()
-            tts.write_to_fp(fp)
-            fp.seek(0)
+            # Tạo audio từ văn bản trả lời của AI
+            audio_file = text_to_speech(response)
             
-            # Lưu cả nội dung text và audio vào tin nhắn
-            st.session_state.messages.append({"role": "assistant", "content": response, "audio": fp})
-            
+            if audio_file:
+                # Lưu cả nội dung text và audio vào tin nhắn
+                st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_file})
+            else:
+                # Nếu tạo audio lỗi, chỉ lưu text
+                st.session_state.messages.append({"role": "assistant", "content": response})
+
             st.rerun()
 
         except sr.UnknownValueError:
@@ -265,7 +281,6 @@ if not st.session_state.voice_mode:
                 history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
                 response = call_gemini_api(data_for_chatbot, user_input, history)
                 st.markdown(response)
-                # Lưu tin nhắn của assistant mà không có audio
                 st.session_state.messages.append({"role": "assistant", "content": response})
 
 # --- Các nút điều khiển trong Sidebar ---
