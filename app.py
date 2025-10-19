@@ -168,7 +168,7 @@ with st.sidebar:
     st.text_input("Google Sheets Key", value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60", disabled=True)
     
     conversation_mode = st.toggle(
-        "Chế độ đàm thoại", 
+        "https://icons8.com/icon/CxtSkA0JgYd1/microphone", 
         value=True, 
         help="Khi được bật, câu trả lời của AI sẽ tự động phát. Lưu ý: Trình duyệt có thể chặn tính năng này."
     )
@@ -283,3 +283,4 @@ for message in st.session_state.messages:
 if "autoplay_audio" in st.session_state and st.session_state.autoplay_audio:
     st.audio(st.session_state.autoplay_audio, format='audio/mp3', autoplay=True)
     del st.session_state.autoplay_audio
+
