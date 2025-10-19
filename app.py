@@ -5,6 +5,8 @@ from io import StringIO, BytesIO
 import urllib.request
 import altair as alt
 import re
+import base64 # Thư viện để chuyển đổi ảnh
+from pathlib import Path # Thư viện để xử lý đường dẫn file
 
 # Thư viện cho tính năng giọng nói
 from streamlit_mic_recorder import mic_recorder
@@ -21,7 +23,60 @@ except (FileNotFoundError, KeyError):
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
 
-# --- Hàm dọn dẹp văn bản ---
+# --- THAY ĐỔI: Hàm để chuyển đổi ảnh sang Base64 ---
+@st.cache_data
+def get_image_as_base64(path: Path) -> str:
+    """Hàm này đọc file ảnh và chuyển nó thành chuỗi Base64."""
+    try:
+        with open(path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except FileNotFoundError:
+        st.error(f"Không tìm thấy file ảnh tại đường dẫn: {path}")
+        return ""
+
+# --- THAY ĐỔI: Hàm để tạo và áp dụng CSS tùy chỉnh ---
+def apply_custom_css():
+    """Hàm này tạo ra mã CSS để thay thế icon của nút mic."""
+    # Đường dẫn đến các file ảnh của bạn
+    start_icon_path = Path("assets/oppenmic.png")
+    stop_icon_path = Path("aassets/closemic.png")
+
+    # Chuyển ảnh sang Base64
+    start_icon_b64 = get_image_as_base64(start_icon_path)
+    stop_icon_b64 = get_image_as_base64(stop_icon_path)
+
+    if not start_icon_b64 or not stop_icon_b64:
+        st.warning("Không thể áp dụng icon tùy chỉnh do không tìm thấy file ảnh.")
+        return
+
+    custom_css = f"""
+    <style>
+        /* Tìm đến nút bấm của mic recorder */
+        div[data-testid="stToolbar"] button[title*="Start recording"], div[data-testid="stToolbar"] button[title*="Stop recording"] {{
+            /* Ẩn icon mặc định (nếu có) và chữ */
+            color: transparent !important;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain; /* Hoặc 'cover' tùy theo ảnh của bạn */
+            border: none !important; /* Xóa viền */
+            width: 32px; /* Kích thước nút */
+            height: 32px;
+        }}
+
+        /* Icon cho trạng thái "Start" */
+        div[data-testid="stToolbar"] button[title*="Start recording"] {{
+            background-image: url(data:image/png;base64,{start_icon_b64});
+        }}
+        
+        /* Icon cho trạng thái "Stop" */
+        div[data-testid="stToolbar"] button[title*="Stop recording"] {{
+            background-image: url(data:image/png;base64,{stop_icon_b64});
+        }}
+    </style>
+    """
+    st.markdown(custom_css, unsafe_allow_html=True)
+
+# --- Các hàm khác không thay đổi ---
 def clean_text_for_speech(text: str) -> str:
     text = re.sub(r'\*\*', '', text)
     text = re.sub(r'\*', '', text)
@@ -29,7 +84,6 @@ def clean_text_for_speech(text: str) -> str:
     text = text.replace(':', ',')
     return text
 
-# --- Hàm chuyển văn bản thành audio ---
 def text_to_speech(text: str, language: str = 'vi'):
     try:
         cleaned_text = clean_text_for_speech(text)
@@ -42,9 +96,9 @@ def text_to_speech(text: str, language: str = 'vi'):
         st.error(f"Lỗi khi tạo âm thanh: {e}")
         return None
 
-# --- Tải và chuẩn bị dữ liệu (Không thay đổi) ---
 @st.cache_data(ttl=300)
 def load_data_from_sheets(sheet_key):
+    # ... (giữ nguyên mã của hàm này)
     if not sheet_key:
         return None
     url = f"https://docs.google.com/spreadsheets/d/{sheet_key}/export?format=csv&gid=0"
@@ -63,9 +117,9 @@ def load_data_from_sheets(sheet_key):
         st.error(f"Lỗi tải dữ liệu từ Sheets: {e}")
         return None
 
-# --- LOGIC TÍNH ĐIỂM (Không thay đổi) ---
 @st.cache_data
 def calculate_disease_scores(df):
+    # ... (giữ nguyên mã của hàm này)
     if df is None or df.empty:
         return pd.DataFrame(), []
     disease_names = [d for d in df['Tình trạng lúa'].unique() if d not in ['healthy', 'Khỏe mạnh', 'Không xác định']]
@@ -99,8 +153,8 @@ def calculate_disease_scores(df):
                 warnings.append(f"Bệnh '{disease}' đã vượt ngưỡng cảnh báo với {score} điểm!")
     return scores_df, warnings
 
-# --- HÀM PHÂN TÍCH & GỌI API (Không thay đổi) ---
 def analyze_scores_for_chatbot(scores_df):
+    # ... (giữ nguyên mã của hàm này)
     if scores_df is None or scores_df.empty:
         return "Hiện không có dữ liệu điểm nguy hiểm để phân tích."
     latest_scores = scores_df.iloc[-1]
@@ -132,6 +186,7 @@ def analyze_scores_for_chatbot(scores_df):
     return summary_text
 
 def call_gemini_api(summary_report, user_prompt, history=""):
+    # ... (giữ nguyên mã của hàm này)
     system_prompt = f"""
 Bạn là CHTN, một trợ lý AI nông nghiệp chuyên phân tích biểu đồ và dữ liệu diễn biến. Dựa vào "Báo cáo phân tích diễn biến điểm nguy hiểm" dưới đây, hãy trả lời người dùng như một chuyên gia.
 QUY TẮC:
@@ -161,22 +216,25 @@ Câu hỏi của người dùng: "{user_prompt}"
 # --- Giao diện ứng dụng Streamlit ---
 st.title("WED HỆ THỐNG GIÁM SÁT & CHUẨN ĐOÁN BỆNH Ở Lúa CHTN")
 
-# --- THAY ĐỔI: Chuyển nút bấm Mic vào Sidebar ---
+# --- THAY ĐỔI: Áp dụng CSS tùy chỉnh ngay từ đầu ---
+apply_custom_css()
+
+# --- Chuyển nút bấm Mic vào Sidebar ---
 audio_data = None
 with st.sidebar:
     st.header("Cấu hình")
     st.text_input("Google Sheets Key", value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60", disabled=True)
     
     conversation_mode = st.toggle(
-        "https://icons8.com/icon/CxtSkA0JgYd1/microphone", 
+        "Chế độ đàm thoại", 
         value=True, 
-        help="Khi được bật, câu trả lời của AI sẽ tự động phát. Lưu ý: Trình duyệt có thể chặn tính năng này."
+        help="Khi được bật, câu trả lời của AI sẽ tự động phát."
     )
     
     st.markdown("---")
     st.write("**Trò chuyện bằng giọng nói:**")
-    # Nút mic thu âm được đặt ở đây để nó luôn cố định
-    audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
+    # --- THAY ĐỔI: Xóa prompt để CSS có thể thay thế hoàn toàn ---
+    audio_data = mic_recorder(start_prompt="&nbsp;", stop_prompt="&nbsp;", key='mic_recorder', use_container_width=True)
     st.markdown("---")
 
     if st.button("Tải lại & Phân tích dữ liệu"):
@@ -188,12 +246,12 @@ with st.sidebar:
             del st.session_state['last_audio_id']
         st.rerun()
 
-# --- LUỒNG XỬ LÝ CHÍNH ---
+# --- Các phần còn lại giữ nguyên ---
+# (Dán phần còn lại của file app.py của bạn vào đây)
 df_data = load_data_from_sheets("1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
 scores_df, warnings = calculate_disease_scores(df_data)
 data_for_chatbot = analyze_scores_for_chatbot(scores_df)
 
-# --- HIỂN THỊ BIỂU ĐỒ NGUY HIỂM (Không thay đổi) ---
 if scores_df is not None and not scores_df.empty:
     with st.expander("Xem biểu đồ điểm nguy hiểm của bệnh", expanded=True):
         min_date = scores_df['Date'].min()
@@ -222,7 +280,6 @@ if scores_df is not None and not scores_df.empty:
         else:
             st.warning("Không có dữ liệu để hiển thị trong khoảng ngày đã chọn.")
 
-# --- Giao diện Chatbot ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
     initial_msg = "Chào bác, con là AI CHTN. Con sẽ theo dõi và cảnh báo nếu có dịch bệnh nguy hiểm."
@@ -231,10 +288,8 @@ if "messages" not in st.session_state:
         warning_text = "⚠️ **CẢNH BÁO KHẨN!**\n\n" + "\n".join(f"- {w}" for w in warnings)
         st.session_state.messages.append({"role": "assistant", "content": warning_text})
 
-# Khối này xử lý input từ giọng nói và văn bản trước
 user_input = None
 
-# --- THAY ĐỔI: Xóa phần hiển thị nút mic ở đây và chỉ xử lý dữ liệu audio_data từ sidebar
 if audio_data and st.session_state.get('last_audio_id') != audio_data['id']:
     st.session_state.last_audio_id = audio_data['id']
     try:
@@ -255,7 +310,6 @@ if audio_data and st.session_state.get('last_audio_id') != audio_data['id']:
 if text_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
     user_input = text_input
 
-# Xử lý input nếu có
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
@@ -273,7 +327,6 @@ if user_input:
     
     st.rerun()
 
-# Khối hiển thị lịch sử chat và tự động phát audio
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -283,4 +336,3 @@ for message in st.session_state.messages:
 if "autoplay_audio" in st.session_state and st.session_state.autoplay_audio:
     st.audio(st.session_state.autoplay_audio, format='audio/mp3', autoplay=True)
     del st.session_state.autoplay_audio
-
