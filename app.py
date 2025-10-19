@@ -159,7 +159,28 @@ Câu hỏi của người dùng: "{user_prompt}"
         return f"Lỗi gọi API: {e}"
 
 # --- Giao diện ứng dụng Streamlit ---
-st.title("WED HỆ THỐNG GIÁM SÁT & CHUẨN ĐOÁN BỆNH Ở LÚA CHTN")
+st.title("WED HỆ THỐNG GIÁM SÁT & CHUẨN ĐOÁN BỆNH Ở Lúa CHTN")
+
+# --- Các nút điều khiển trong Sidebar ---
+with st.sidebar:
+    st.header("Cấu hình")
+    st.text_input("Google Sheets Key", value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60", disabled=True)
+    
+    # --- THAY ĐỔI: Thêm nút bật/tắt chế độ đàm thoại ---
+    conversation_mode = st.toggle(
+        "Chế độ đàm thoại", 
+        value=True, 
+        help="Khi được bật, câu trả lời của AI sẽ tự động phát. Lưu ý: Trình duyệt có thể chặn tính năng này."
+    )
+
+    if st.button("Tải lại & Phân tích dữ liệu"):
+        st.cache_data.clear()
+        st.rerun()
+    if st.button("Xóa lịch sử chat"):
+        st.session_state.messages = []
+        if 'last_audio_id' in st.session_state:
+            del st.session_state['last_audio_id']
+        st.rerun()
 
 # --- LUỒNG XỬ LÝ CHÍNH ---
 df_data = load_data_from_sheets("1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60")
@@ -204,76 +225,70 @@ if "messages" not in st.session_state:
         warning_text = "⚠️ **CẢNH BÁO KHẨN!**\n\n" + "\n".join(f"- {w}" for w in warnings)
         st.session_state.messages.append({"role": "assistant", "content": warning_text})
 
-# Hiển thị lịch sử chat
+# --- THAY ĐỔI: Tách riêng phần xử lý và phần hiển thị ---
+# Khối này xử lý input từ giọng nói và văn bản trước
+user_input = None
+input_source = None
+
+st.write("---")
+st.write("**Trò chuyện bằng giọng nói:**")
+audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
+
+if audio_data and st.session_state.get('last_audio_id') != audio_data['id']:
+    st.session_state.last_audio_id = audio_data['id']
+    try:
+        audio_bytes = BytesIO(audio_data['bytes'])
+        audio_segment = AudioSegment.from_file(audio_bytes)
+        r = sr.Recognizer()
+        with BytesIO() as wav_file:
+            audio_segment.export(wav_file, format="wav")
+            wav_file.seek(0)
+            with sr.AudioFile(wav_file) as source:
+                audio = r.record(source)
+        user_input = r.recognize_google(audio, language="vi-VN")
+        input_source = "voice"
+    except sr.UnknownValueError:
+        st.toast("Con không nghe rõ, bác thử lại nhé!", icon="🤔")
+    except Exception as e:
+        st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
+
+if text_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
+    user_input = text_input
+    input_source = "text"
+
+# Xử lý input nếu có
+if user_input:
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
+    response = call_gemini_api(data_for_chatbot, user_input, history)
+    audio_file = text_to_speech(response)
+    
+    assistant_message = {"role": "assistant", "content": response}
+    
+    # --- THAY ĐỔI: Quyết định cách xử lý audio ---
+    if conversation_mode and audio_file:
+        # Lưu audio vào một biến tạm để tự động phát sau
+        st.session_state.autoplay_audio = audio_file
+    elif audio_file:
+        # Gắn audio vào tin nhắn để phát thủ công
+        assistant_message["manual_audio"] = audio_file
+        
+    st.session_state.messages.append(assistant_message)
+    
+    # Chạy lại script để cập nhật giao diện
+    st.rerun()
+
+# --- THAY ĐỔI: Khối hiển thị lịch sử chat và tự động phát audio ---
+# Hiển thị tất cả tin nhắn trong lịch sử
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        if message["role"] == "assistant" and "audio" in message:
-            st.audio(message["audio"], format='audio/mp3', start_time=0)
+        # Nếu có audio để phát thủ công, hiển thị nút play
+        if "manual_audio" in message:
+            st.audio(message["manual_audio"], format='audio/mp3')
 
-# --- THAY ĐỔI: Giao diện trò chuyện đơn giản hơn ---
-st.write("---")
-st.write("**Trò chuyện bằng giọng nói:**")
-
-audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
-
-if audio_data:
-    # --- THAY ĐỔI: Thêm kiểm tra chống lặp ---
-    # Chỉ xử lý nếu audio mới được ghi lại (dựa vào ID duy nhất)
-    if st.session_state.get('last_audio_id') != audio_data['id']:
-        st.session_state.last_audio_id = audio_data['id'] # Lưu ID của audio vừa xử lý
-        try:
-            audio_bytes = BytesIO(audio_data['bytes'])
-            audio_segment = AudioSegment.from_file(audio_bytes)
-            r = sr.Recognizer()
-            with BytesIO() as wav_file:
-                audio_segment.export(wav_file, format="wav")
-                wav_file.seek(0)
-                with sr.AudioFile(wav_file) as source:
-                    audio = r.record(source)
-            transcribed_text = r.recognize_google(audio, language="vi-VN")
-            
-            st.session_state.messages.append({"role": "user", "content": transcribed_text})
-            
-            history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-            response = call_gemini_api(data_for_chatbot, transcribed_text, history)
-
-            audio_file = text_to_speech(response)
-            
-            if audio_file:
-                st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_file})
-            else:
-                st.session_state.messages.append({"role": "assistant", "content": response})
-
-            st.rerun()
-
-        except sr.UnknownValueError:
-            st.toast("Con không nghe rõ, bác thử lại nhé!", icon="🤔")
-        except Exception as e:
-            st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
-
-# Ô nhập văn bản luôn hiển thị
-if user_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    with st.chat_message("assistant"):
-        with st.spinner("Con đang nghĩ câu trả lời..."):
-            history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-5:]])
-            response = call_gemini_api(data_for_chatbot, user_input, history)
-            st.markdown(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-
-# --- Các nút điều khiển trong Sidebar ---
-with st.sidebar:
-    st.header("Cấu hình")
-    st.text_input("Google Sheets Key", value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60", disabled=True)
-    if st.button("Tải lại & Phân tích dữ liệu"):
-        st.cache_data.clear()
-        st.rerun()
-    if st.button("Xóa lịch sử chat"):
-        st.session_state.messages = []
-        if 'last_audio_id' in st.session_state:
-            del st.session_state['last_audio_id']
-        st.rerun()
+# Tự động phát audio mới nhất nếu ở chế độ đàm thoại
+if "autoplay_audio" in st.session_state and st.session_state.autoplay_audio:
+    st.audio(st.session_state.autoplay_audio, format='audio/mp3', autoplay=True)
+    # Xóa audio khỏi biến tạm sau khi đã phát để không bị phát lại
+    del st.session_state.autoplay_audio
