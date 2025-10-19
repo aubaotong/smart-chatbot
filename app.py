@@ -159,9 +159,9 @@ Câu hỏi của người dùng: "{user_prompt}"
         return f"Lỗi gọi API: {e}"
 
 # --- Giao diện ứng dụng Streamlit ---
-st.title("WED HỆ THỐNG GIÁM SÁT & CHUẨN ĐOÁN BỆNH Ở Lúa CHTN")
+st.title("WED HỆ THỐNG GIÁM SÁT & CHUẨN ĐOÁN BỆNH Ở LÚA CHTN")
 
-# --- THAY ĐỔI: Chuyển nút bấm Mic vào Sidebar ---
+#  Sidebar ---
 audio_data = None
 with st.sidebar:
     st.header("Cấu hình")
@@ -174,15 +174,15 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    st.write("**Trò chuyện bằng giọng nói:**")
+    st.write("**Trò chuyện 🔊 nhấn đển bắt đầu**")
     # Nút mic thu âm được đặt ở đây để nó luôn cố định
-    audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
+    audio_data = mic_recorder(start_prompt=" 🎙️", stop_prompt=" ..⏹️..", key='mic_recorder')
     st.markdown("---")
 
     if st.button("Tải lại & Phân tích dữ liệu"):
         st.cache_data.clear()
         st.rerun()
-    if st.button("Xóa lịch sử chat"):
+    if st.button("Xóa lịch sử"):
         st.session_state.messages = []
         if 'last_audio_id' in st.session_state:
             del st.session_state['last_audio_id']
@@ -248,11 +248,11 @@ if audio_data and st.session_state.get('last_audio_id') != audio_data['id']:
                 audio = r.record(source)
         user_input = r.recognize_google(audio, language="vi-VN")
     except sr.UnknownValueError:
-        st.toast("Con không nghe rõ, bác thử lại nhé!", icon="🤔")
+        st.toast("Con không nghe rõ, bác thử lại nhé!", icon="🤧")
     except Exception as e:
         st.error(f"Đã có lỗi xảy ra khi xử lý giọng nói: {e}")
 
-if text_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
+if text_input := st.chat_input("Nhập câu hỏi tại đây tại đây..."):
     user_input = text_input
 
 # Xử lý input nếu có
@@ -283,3 +283,4 @@ for message in st.session_state.messages:
 if "autoplay_audio" in st.session_state and st.session_state.autoplay_audio:
     st.audio(st.session_state.autoplay_audio, format='audio/mp3', autoplay=True)
     del st.session_state.autoplay_audio
+
