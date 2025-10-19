@@ -161,17 +161,23 @@ Câu hỏi của người dùng: "{user_prompt}"
 # --- Giao diện ứng dụng Streamlit ---
 st.title("WED HỆ THỐNG GIÁM SÁT & CHUẨN ĐOÁN BỆNH Ở Lúa CHTN")
 
-# --- Các nút điều khiển trong Sidebar ---
+# --- THAY ĐỔI: Chuyển nút bấm Mic vào Sidebar ---
+audio_data = None
 with st.sidebar:
     st.header("Cấu hình")
     st.text_input("Google Sheets Key", value="1JBoW6Wnv6satuZHlNXgJP0lzRXhSqgYRTrWeBJTKk60", disabled=True)
     
-    # --- THAY ĐỔI: Thêm nút bật/tắt chế độ đàm thoại ---
     conversation_mode = st.toggle(
         "Chế độ đàm thoại", 
         value=True, 
         help="Khi được bật, câu trả lời của AI sẽ tự động phát. Lưu ý: Trình duyệt có thể chặn tính năng này."
     )
+    
+    st.markdown("---")
+    st.write("**Trò chuyện bằng giọng nói:**")
+    # Nút mic thu âm được đặt ở đây để nó luôn cố định
+    audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
+    st.markdown("---")
 
     if st.button("Tải lại & Phân tích dữ liệu"):
         st.cache_data.clear()
@@ -225,15 +231,10 @@ if "messages" not in st.session_state:
         warning_text = "⚠️ **CẢNH BÁO KHẨN!**\n\n" + "\n".join(f"- {w}" for w in warnings)
         st.session_state.messages.append({"role": "assistant", "content": warning_text})
 
-# --- THAY ĐỔI: Tách riêng phần xử lý và phần hiển thị ---
 # Khối này xử lý input từ giọng nói và văn bản trước
 user_input = None
-input_source = None
 
-st.write("---")
-st.write("**Trò chuyện bằng giọng nói:**")
-audio_data = mic_recorder(start_prompt=" Bấm để nói", stop_prompt=" Đang xử lý...", key='mic_recorder')
-
+# --- THAY ĐỔI: Xóa phần hiển thị nút mic ở đây và chỉ xử lý dữ liệu audio_data từ sidebar
 if audio_data and st.session_state.get('last_audio_id') != audio_data['id']:
     st.session_state.last_audio_id = audio_data['id']
     try:
@@ -246,7 +247,6 @@ if audio_data and st.session_state.get('last_audio_id') != audio_data['id']:
             with sr.AudioFile(wav_file) as source:
                 audio = r.record(source)
         user_input = r.recognize_google(audio, language="vi-VN")
-        input_source = "voice"
     except sr.UnknownValueError:
         st.toast("Con không nghe rõ, bác thử lại nhé!", icon="🤔")
     except Exception as e:
@@ -254,7 +254,6 @@ if audio_data and st.session_state.get('last_audio_id') != audio_data['id']:
 
 if text_input := st.chat_input("Hoặc nhập tin nhắn tại đây..."):
     user_input = text_input
-    input_source = "text"
 
 # Xử lý input nếu có
 if user_input:
@@ -265,30 +264,22 @@ if user_input:
     
     assistant_message = {"role": "assistant", "content": response}
     
-    # --- THAY ĐỔI: Quyết định cách xử lý audio ---
     if conversation_mode and audio_file:
-        # Lưu audio vào một biến tạm để tự động phát sau
         st.session_state.autoplay_audio = audio_file
     elif audio_file:
-        # Gắn audio vào tin nhắn để phát thủ công
         assistant_message["manual_audio"] = audio_file
         
     st.session_state.messages.append(assistant_message)
     
-    # Chạy lại script để cập nhật giao diện
     st.rerun()
 
-# --- THAY ĐỔI: Khối hiển thị lịch sử chat và tự động phát audio ---
-# Hiển thị tất cả tin nhắn trong lịch sử
+# Khối hiển thị lịch sử chat và tự động phát audio
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        # Nếu có audio để phát thủ công, hiển thị nút play
         if "manual_audio" in message:
             st.audio(message["manual_audio"], format='audio/mp3')
 
-# Tự động phát audio mới nhất nếu ở chế độ đàm thoại
 if "autoplay_audio" in st.session_state and st.session_state.autoplay_audio:
     st.audio(st.session_state.autoplay_audio, format='audio/mp3', autoplay=True)
-    # Xóa audio khỏi biến tạm sau khi đã phát để không bị phát lại
     del st.session_state.autoplay_audio
