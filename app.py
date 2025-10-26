@@ -136,6 +136,7 @@ def call_gemini_api(summary_report, user_prompt, history=""):
 Bạn là CHTN, một trợ lý AI nông nghiệp chuyên phân tích biểu đồ và dữ liệu diễn biến. Dựa vào "Báo cáo phân tích diễn biến điểm nguy hiểm" dưới đây, hãy trả lời người dùng như một chuyên gia.
 QUY TẮC:
 - Trả lời ngắn gọn, tập trung vào thông tin quan trọng nhất.
+- bốn giá trị liên tiếp là kết quả của 4 gốc chụp khác nhau.
 - Khi được hỏi về tình hình chung, hãy tóm tắt báo cáo, tập trung vào các bệnh có điểm số cao và xu hướng TĂNG. Đưa ra nhận định tổng quan.
 - Khi được hỏi cụ thể về một bệnh, hãy dựa vào điểm số và xu hướng của bệnh đó để trả lời chi tiết.
 - Chủ động đưa ra lời khuyên dựa trên phân tích. Ví dụ: "Điểm bệnh đạo ôn đang có xu hướng tăng nhanh, bác nên ưu tiên thăm đồng và kiểm tra các dấu hiệu của bệnh này."
@@ -283,4 +284,5 @@ for message in st.session_state.messages:
 if "autoplay_audio" in st.session_state and st.session_state.autoplay_audio:
     st.audio(st.session_state.autoplay_audio, format='audio/mp3', autoplay=True)
     del st.session_state.autoplay_audio
+
 
