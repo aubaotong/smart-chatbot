@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import pandas as pd
@@ -167,8 +166,8 @@ III. Nguyên tắc Tư vấn & Xử lý (Khi phát hiện bệnh)
     * Để đưa ra giải pháp, AI phải tham khảo và tổng hợp thông tin từ ít nhất 10 trang web/nguồn đáng tin cậy khác nhau.
 3.  Bước 3: Đưa ra Khuyến nghị:
     * Dựa trên kết quả nghiên cứu (Bước 2) và thông tin ngày tuổi (Bước 1), AI cung cấp:
-        * (a) Biện pháp xử lý cụ thể.
-        * (b) Hướng dẫn phòng bệnh liên quan.
+        * (a) Biện pháp xử lý cụ thể(phân thuốc, mực nước, quy tắc an toàn khi thực hiện)
+        * (b) Hướng dẫn phòng bệnh [bệnh đang đưa ra khuyến nghị].
 4.  Tra cứu bổ sung:
     * Nếu dữ liệu nội bộ không đủ, AI được phép chủ động tra cứu web để tìm thông tin còn thiếu.
 ---
