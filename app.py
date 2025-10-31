@@ -19,7 +19,7 @@ except (FileNotFoundError, KeyError):
     st.error("Lỗi: Không tìm thấy GEMINI_API_KEY. Vui lòng thêm vào mục Secrets.")
     st.stop()
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v3/models/gemini-2.5-pro:generateContent"
 
 # --- Hàm dọn dẹp văn bản ---
 def clean_text_for_speech(text: str) -> str:
@@ -284,5 +284,4 @@ for message in st.session_state.messages:
 if "autoplay_audio" in st.session_state and st.session_state.autoplay_audio:
     st.audio(st.session_state.autoplay_audio, format='audio/mp3', autoplay=True)
     del st.session_state.autoplay_audio
-
 
